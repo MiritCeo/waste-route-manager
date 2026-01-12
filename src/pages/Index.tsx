@@ -1,17 +1,32 @@
 import { useState, useCallback } from 'react';
 import { Route, Address, WasteCategory } from '@/types/waste';
 import { mockRoutes } from '@/data/mockData';
+import { LoginPage } from './LoginPage';
 import { RouteSelection } from './RouteSelection';
 import { AddressList } from './AddressList';
 import { CollectionView } from './CollectionView';
+import { DailySummary } from './DailySummary';
 
-type View = 'routes' | 'addresses' | 'collection';
+type View = 'login' | 'routes' | 'addresses' | 'collection' | 'summary';
 
 const Index = () => {
   const [routes, setRoutes] = useState<Route[]>(mockRoutes);
-  const [currentView, setCurrentView] = useState<View>('routes');
+  const [currentView, setCurrentView] = useState<View>('login');
   const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
   const [selectedAddress, setSelectedAddress] = useState<Address | null>(null);
+  const [employeeId, setEmployeeId] = useState<string>('');
+
+  const handleLogin = useCallback((id: string) => {
+    setEmployeeId(id);
+    setCurrentView('routes');
+  }, []);
+
+  const handleLogout = useCallback(() => {
+    setEmployeeId('');
+    setCurrentView('login');
+    setSelectedRoute(null);
+    setSelectedAddress(null);
+  }, []);
 
   const handleSelectRoute = useCallback((route: Route) => {
     setSelectedRoute(route);
@@ -32,6 +47,10 @@ const Index = () => {
   const handleBackToAddresses = useCallback(() => {
     setCurrentView('addresses');
     setSelectedAddress(null);
+  }, []);
+
+  const handleOpenSummary = useCallback(() => {
+    setCurrentView('summary');
   }, []);
 
   const handleSaveCollection = useCallback((updatedWaste: WasteCategory[]) => {
@@ -79,6 +98,21 @@ const Index = () => {
   }, [selectedRoute, selectedAddress]);
 
   // Render current view
+  if (currentView === 'login') {
+    return <LoginPage onLogin={handleLogin} />;
+  }
+
+  if (currentView === 'summary') {
+    return (
+      <DailySummary
+        routes={routes}
+        employeeId={employeeId}
+        onLogout={handleLogout}
+        onBack={handleBackToRoutes}
+      />
+    );
+  }
+
   if (currentView === 'collection' && selectedAddress && selectedRoute) {
     return (
       <CollectionView
@@ -106,6 +140,8 @@ const Index = () => {
     <RouteSelection
       routes={routes}
       onSelectRoute={handleSelectRoute}
+      onOpenSummary={handleOpenSummary}
+      employeeId={employeeId}
     />
   );
 };
