@@ -1,4 +1,4 @@
-import { ChevronRight, MapPin, Calendar } from 'lucide-react';
+import { ChevronRight, MapPin } from 'lucide-react';
 import { Route } from '@/types/waste';
 import { cn } from '@/lib/utils';
 
@@ -32,10 +32,11 @@ export const RouteCard = ({ route, onClick }: RouteCardProps) => {
         <h3 className="text-lg font-bold text-foreground truncate">
           {route.name}
         </h3>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground mt-1">
-          <Calendar className="w-4 h-4" />
-          <span>{new Date(route.date).toLocaleDateString('pl-PL')}</span>
-        </div>
+        <p className="text-sm text-muted-foreground mt-1">
+          {route.updatedAt
+            ? `Aktualizacja: ${new Date(route.updatedAt).toLocaleString('pl-PL')}`
+            : 'Brak daty aktualizacji'}
+        </p>
         <div className="flex items-center gap-3 mt-2">
           <div className="flex-1 h-2 bg-secondary rounded-full overflow-hidden">
             <div

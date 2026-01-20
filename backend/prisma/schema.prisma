@@ -1,0 +1,76 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Address {
+  id                 String   @id @default(uuid())
+  street             String
+  number             String
+  city               String
+  postalCode         String?
+  notes              String?
+  wasteTypes         Json
+  declaredContainers Json?
+  active             Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  routeAddresses RouteAddress[]
+
+  @@index([city])
+  @@index([street])
+}
+
+model Route {
+  id                 String   @id @default(uuid())
+  name               String
+  date               DateTime?
+  updatedAt          DateTime @updatedAt
+  totalAddresses     Int      @default(0)
+  collectedAddresses Int      @default(0)
+  publicationStatus  String   @default("DRAFT")
+  assignedDriverId   String?
+
+  routeAddresses RouteAddress[]
+}
+
+model RouteAddress {
+  id            String  @id @default(uuid())
+  routeId       String
+  addressId     String
+  position      Int     @default(0)
+  waste         Json
+  status        String  @default("PENDING")
+  isCollected   Boolean @default(false)
+  issueReason   String?
+  issueFlags    Json?
+  issueNote     String?
+  issuePhoto    String?
+  reportToAdmin Boolean @default(false)
+
+  route   Route   @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  address Address @relation(fields: [addressId], references: [id], onDelete: Cascade)
+
+  @@unique([routeId, addressId])
+  @@index([routeId])
+  @@index([addressId])
+}
+
+model User {
+  id         String   @id @default(uuid())
+  employeeId String   @unique
+  name       String
+  role       String
+  permissions Json
+  pinHash    String
+  email      String?
+  phone      String?
+  active     Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  lastLogin  DateTime?
+}

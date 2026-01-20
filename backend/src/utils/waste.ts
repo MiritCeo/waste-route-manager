@@ -1,0 +1,32 @@
+export type WasteType =
+  | 'bio-green'
+  | 'bio-kitchen'
+  | 'glass-clear'
+  | 'glass-colored'
+  | 'paper'
+  | 'plastic'
+  | 'ash'
+  | 'mixed';
+
+export const WASTE_OPTIONS: Array<{ id: WasteType; name: string; icon: string }> = [
+  { id: 'bio-green', name: 'Bio zielone', icon: '🌿' },
+  { id: 'bio-kitchen', name: 'Bio kuchenne', icon: '🍂' },
+  { id: 'glass-clear', name: 'Szkło bezbarwne', icon: '🫙' },
+  { id: 'glass-colored', name: 'Szkło kolorowe', icon: '🍾' },
+  { id: 'paper', name: 'Papier', icon: '📦' },
+  { id: 'plastic', name: 'Plastik i metal', icon: '♻️' },
+  { id: 'ash', name: 'Popiół', icon: '🔥' },
+  { id: 'mixed', name: 'Zmieszane', icon: '🗑️' },
+];
+
+export const buildWasteCategories = (types: WasteType[]) => {
+  return types.map(type => {
+    const option = WASTE_OPTIONS.find(item => item.id === type);
+    return {
+      id: type,
+      name: option?.name || type,
+      icon: option?.icon || '🗑️',
+      count: 0,
+    };
+  });
+};

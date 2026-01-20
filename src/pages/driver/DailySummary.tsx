@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
-import { Route, WasteCategory } from '@/types/waste';
+import { useNavigate } from 'react-router-dom';
+import { WasteCategory } from '@/types/waste';
 import { Header } from '@/components/Header';
 import { 
   MapPin, 
@@ -11,13 +12,9 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import logo from '@/assets/kompaktowy-pleszew-logo.png';
-
-interface DailySummaryProps {
-  routes: Route[];
-  employeeId: string;
-  onLogout: () => void;
-  onBack: () => void;
-}
+import { useAuth } from '@/contexts/AuthContext';
+import { useRoutes } from '@/contexts/RouteContext';
+import { ROUTES } from '@/constants/routes';
 
 interface WasteStats {
   id: string;
@@ -26,7 +23,19 @@ interface WasteStats {
   total: number;
 }
 
-export const DailySummary = ({ routes, employeeId, onLogout, onBack }: DailySummaryProps) => {
+export const DailySummary = () => {
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+  const { routes } = useRoutes();
+
+  const handleBack = () => {
+    navigate(ROUTES.DRIVER.ROUTES);
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    navigate(ROUTES.LOGIN);
+  };
   const stats = useMemo(() => {
     let totalAddresses = 0;
     let collectedAddresses = 0;
@@ -35,7 +44,8 @@ export const DailySummary = ({ routes, employeeId, onLogout, onBack }: DailySumm
     routes.forEach(route => {
       totalAddresses += route.totalAddresses;
       route.addresses.forEach(address => {
-        if (address.isCollected) {
+        const isCollected = address.status ? address.status === 'COLLECTED' : address.isCollected;
+        if (isCollected) {
           collectedAddresses++;
           address.waste.forEach(waste => {
             if (!wasteMap[waste.id]) {
@@ -88,14 +98,16 @@ export const DailySummary = ({ routes, employeeId, onLogout, onBack }: DailySumm
           day: 'numeric', 
           month: 'long' 
         })}
-        onBack={onBack}
+        onBack={handleBack}
         rightElement={
-          <button 
-            onClick={onLogout}
-            className="w-12 h-12 rounded-xl bg-destructive/10 flex items-center justify-center active:scale-95 transition-transform"
+          <Button
+            onClick={handleLogout}
+            variant="outline"
+            className="gap-2 border-destructive/30 text-destructive hover:bg-destructive/10"
           >
-            <LogOut className="w-5 h-5 text-destructive" />
-          </button>
+            <LogOut className="w-4 h-4" />
+            Wyloguj
+          </Button>
         }
       />
 
@@ -107,7 +119,7 @@ export const DailySummary = ({ routes, employeeId, onLogout, onBack }: DailySumm
           </div>
           <div className="flex-1">
             <p className="text-sm text-muted-foreground">Pracownik</p>
-            <p className="font-semibold text-foreground">Nr {employeeId}</p>
+            <p className="font-semibold text-foreground">{user?.name || `Nr ${user?.employeeId}`}</p>
           </div>
         </div>
 
@@ -199,14 +211,20 @@ export const DailySummary = ({ routes, employeeId, onLogout, onBack }: DailySumm
         {stats.wasteStats.length === 0 && (
           <div className="bg-card rounded-2xl p-8 border border-border text-center">
             <BarChart3 className="w-12 h-12 text-muted-foreground mx-auto mb-3" />
-            <p className="text-muted-foreground">Brak zebranych odpadów</p>
-            <p className="text-sm text-muted-foreground mt-1">Rozpocznij zbiórkę, aby zobaczyć statystyki</p>
+            <p className="text-muted-foreground">
+              {stats.collectedAddresses > 0 ? 'Brak wpisanych ilości odpadów' : 'Brak zebranych odpadów'}
+            </p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {stats.collectedAddresses > 0
+                ? 'Uzupełnij ilości w odebranych adresach, aby zobaczyć statystyki'
+                : 'Rozpocznij zbiórkę, aby zobaczyć statystyki'}
+            </p>
           </div>
         )}
 
         {/* Logout button */}
         <Button
-          onClick={onLogout}
+          onClick={handleLogout}
           variant="outline"
           className="w-full h-14 text-lg font-semibold rounded-xl border-destructive/30 text-destructive hover:bg-destructive/10"
         >

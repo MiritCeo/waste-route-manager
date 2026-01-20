@@ -1,20 +1,23 @@
 import { useState } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { User, Lock, LogIn } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import logo from '@/assets/kompaktowy-pleszew-logo.png';
+import { useAuth } from '@/contexts/AuthContext';
+import { ROUTES } from '@/constants/routes';
 
-interface LoginPageProps {
-  onLogin: (employeeId: string) => void;
-}
-
-export const LoginPage = ({ onLogin }: LoginPageProps) => {
+export const LoginPage = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { login } = useAuth();
+  
   const [employeeId, setEmployeeId] = useState('');
   const [pin, setPin] = useState('');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     
@@ -30,11 +33,16 @@ export const LoginPage = ({ onLogin }: LoginPageProps) => {
 
     setIsLoading(true);
     
-    // Simulate login (in real app would validate against backend)
-    setTimeout(() => {
+    try {
+      await login({ employeeId, pin });
+      
+      // Redirect based on where user came from or to default route
+      const from = (location.state as any)?.from?.pathname || ROUTES.DRIVER.ROUTES;
+      navigate(from, { replace: true });
+    } catch (err: any) {
+      setError(err.message || 'Nie udało się zalogować');
       setIsLoading(false);
-      onLogin(employeeId);
-    }, 500);
+    }
   };
 
   return (
@@ -115,7 +123,7 @@ export const LoginPage = ({ onLogin }: LoginPageProps) => {
 
           {/* Demo hint */}
           <div className="text-center text-sm text-muted-foreground">
-            <p>Demo: użyj dowolnego numeru i PIN 1234</p>
+            <p>Demo: 001 / 1234 (kierowca), 002 / 1234 (admin)</p>
           </div>
         </div>
       </div>
