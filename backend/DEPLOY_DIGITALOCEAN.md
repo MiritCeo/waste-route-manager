@@ -240,6 +240,7 @@ server {
   }
 
   location /api/ {
+    client_max_body_size 20m;
     proxy_pass http://127.0.0.1:3000/api/;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -261,3 +262,9 @@ ufw allow 3000
 ufw allow 80
 ufw enable
 ```
+mysql -u root -p -e "USE waste_route_manager; UPDATE User SET pinHash='$2a$10$q.N3wuOXcQo3QGygzNXMle5sEQbsJcbv8e3mF.L06hF7oC1UE5WK6' WHERE employeeId='002';"
+systemctl restart waste-backend
+
+mysql -u root -p -e "USE waste_route_manager; UPDATE User SET pinHash='${$2a$10$uOmTk4xVossXgBZi2gvJye7bgIoZf5At40rsjdL4480MTvrPzOcGm}' WHERE employeeId='002'; SELECT employeeId, LENGTH(pinHash) AS len FROM User WHERE employeeId='002';"
+
+$2a$10$uOmTk4xVossXgBZi2gvJye7bgIoZf5At40rsjdL4480MTvrPzOcGm

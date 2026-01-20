@@ -5,7 +5,7 @@ import { registerAuthRoutes } from './routes/auth.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerDriverRoutes } from './routes/routes.js';
 
-const app = Fastify({ logger: true });
+const app = Fastify({ logger: true, bodyLimit: 15 * 1024 * 1024 });
 
 await app.register(cors, {
   origin: true,
