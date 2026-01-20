@@ -200,7 +200,7 @@ class AdminService {
       return this.mockPublishRoute(id);
     }
 
-    return apiClient.post<AdminRoute>(`/admin/routes/${id}/publish`);
+    return apiClient.post<AdminRoute>(`/admin/routes/${id}/publish`, {});
   }
 
   // Mock implementations
