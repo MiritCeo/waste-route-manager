@@ -200,20 +200,64 @@ npm run build
 systemctl restart waste-backend
 ```
 
-## 9) Frontend — połączenie z backendem
-W `.env` frontendu ustaw:
+## 9) Frontend — build i połączenie z backendem
+Zbuduj frontend na serwerze:
 
 ```
+cd /var/www/waste-route-manager
+npm install
+cat > .env.production << 'EOF'
 VITE_USE_MOCK_DATA=false
-VITE_API_URL=http://TWOJ_IP:3000/api
+VITE_API_URL=http://142.93.167.53:3000/api
+EOF
+npm run build
 ```
 
-## 10) Porty i firewall
+Wynik trafi do `dist/`.
+
+## 10) Nginx (frontend + proxy do API)
+Zainstaluj Nginx:
+
+```
+apt install -y nginx
+systemctl enable nginx
+systemctl start nginx
+```
+
+Konfiguracja:
+
+```
+cat > /etc/nginx/sites-available/waste-app << 'EOF'
+server {
+  listen 80;
+  server_name _;
+
+  root /var/www/waste-route-manager/dist;
+  index index.html;
+
+  location / {
+    try_files $uri /index.html;
+  }
+
+  location /api/ {
+    proxy_pass http://127.0.0.1:3000/api/;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  }
+}
+EOF
+
+ln -s /etc/nginx/sites-available/waste-app /etc/nginx/sites-enabled/waste-app
+nginx -t
+systemctl reload nginx
+```
+
+## 11) Porty i firewall
 Jeśli używasz UFW:
 
 ```
 ufw allow 3000
+ufw allow 80
 ufw enable
 ```
-
-Jeśli planujesz reverse proxy (Nginx), daj znać — przygotuję konfigurację.

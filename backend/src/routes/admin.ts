@@ -1,7 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import bcrypt from 'bcryptjs';
-import { prisma } from '../db';
-import { buildWasteCategories, WASTE_OPTIONS } from '../utils/waste';
+import { prisma } from '../db.js';
+import { buildWasteCategories, WASTE_OPTIONS } from '../utils/waste.js';
 
 const normalizeText = (value?: string) =>
   (value || '')

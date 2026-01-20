@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
-import { prisma } from '../db';
-import { buildWasteCategories } from '../utils/waste';
+import { prisma } from '../db.js';
+import { buildWasteCategories } from '../utils/waste.js';
 
 export const registerDriverRoutes = (app: FastifyInstance) => {
   app.get('/routes', { preHandler: [app.authenticate] }, async () => {

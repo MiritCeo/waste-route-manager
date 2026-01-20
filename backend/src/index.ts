@@ -1,9 +1,9 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
-import { registerAuthRoutes } from './routes/auth';
-import { registerAdminRoutes } from './routes/admin';
-import { registerDriverRoutes } from './routes/routes';
+import { registerAuthRoutes } from './routes/auth.js';
+import { registerAdminRoutes } from './routes/admin.js';
+import { registerDriverRoutes } from './routes/routes.js';
 
 const app = Fastify({ logger: true });
 
