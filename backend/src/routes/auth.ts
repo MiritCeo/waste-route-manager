@@ -19,10 +19,11 @@ export const registerAuthRoutes = (app: FastifyInstance) => {
       return reply.status(401).send({ message: 'Nieprawidłowy PIN' });
     }
 
+    const permissions = Array.isArray(user.permissions) ? user.permissions : [];
     const token = app.jwt.sign({
       sub: user.id,
       role: user.role,
-      permissions: user.permissions,
+      permissions,
     });
 
     await prisma.user.update({
@@ -35,7 +36,7 @@ export const registerAuthRoutes = (app: FastifyInstance) => {
       employeeId: user.employeeId,
       name: user.name,
       role: user.role,
-      permissions: user.permissions,
+      permissions,
       email: user.email,
       phone: user.phone,
       active: user.active,
@@ -76,10 +77,11 @@ export const registerAuthRoutes = (app: FastifyInstance) => {
     if (!user) {
       return reply.status(404).send({ message: 'Nie znaleziono użytkownika' });
     }
+    const permissions = Array.isArray(user.permissions) ? user.permissions : [];
     const token = app.jwt.sign({
       sub: user.id,
       role: user.role,
-      permissions: user.permissions,
+      permissions,
     });
     return reply.send({
       user: {
@@ -87,7 +89,7 @@ export const registerAuthRoutes = (app: FastifyInstance) => {
         employeeId: user.employeeId,
         name: user.name,
         role: user.role,
-        permissions: user.permissions,
+        permissions,
         email: user.email,
         phone: user.phone,
         active: user.active,

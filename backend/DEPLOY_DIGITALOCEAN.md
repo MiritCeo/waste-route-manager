@@ -3,18 +3,61 @@
 Poniżej instrukcja dla backendu (Fastify + Prisma + MySQL) zakładająca,
 że repo jest pobierane z Gita i uruchamiane bez Dockera.
 
-## 1) Przygotowanie serwera
+## 1) Przygotowanie serwera (świeży droplet)
 Zaloguj się na droplet:
 
 ```
 ssh root@TWOJ_IP
 ```
 
-Zainstaluj wymagane pakiety:
+Zaktualizuj system i zainstaluj podstawowe narzędzia:
 
 ```
 apt update && apt upgrade -y
-apt install -y git curl
+apt install -y git curl ufw
+
+
+```
+
+Ustaw strefę czasową:
+
+```
+timedatectl set-timezone Europe/Warsaw
+```
+
+Utwórz użytkownika do deployu:
+
+```
+adduser deploy
+usermod -aG sudo deploy
+```
+
+Zabezpiecz SSH (zalecane):
+
+- wygeneruj klucz lokalnie: `ssh-keygen`
+- skopiuj klucz: `ssh-copy-id deploy@TWOJ_IP`
+- edytuj `/etc/ssh/sshd_config`:
+  - `PermitRootLogin no`
+  - `PasswordAuthentication no`
+- zrestartuj SSH:
+
+```
+systemctl restart ssh
+```
+
+Skonfiguruj firewall (UFW):
+
+```
+ufw allow OpenSSH
+ufw allow 3000
+ufw enable
+ufw status
+```
+
+Od teraz zaloguj się jako użytkownik `deploy`:
+
+```
+ssh deploy@TWOJ_IP
 ```
 
 Zainstaluj Node.js 20 (NodeSource):
@@ -22,6 +65,8 @@ Zainstaluj Node.js 20 (NodeSource):
 ```
 curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
 apt install -y nodejs
+# jeśli npm nie jest dostępny:
+command -v npm >/dev/null || apt install -y npm
 node -v
 npm -v
 ```
@@ -81,6 +126,16 @@ EOF
 ```
 
 ## 5) Migracje i seed
+Pierwsze uruchomienie (tworzy migracje):
+
+```
+npm run prisma:generate
+npx prisma migrate dev --name init
+npm run prisma:seed
+```
+
+Kolejne deploye (migracje już istnieją w repo):
+
 ```
 npm run prisma:generate
 npm run prisma:deploy

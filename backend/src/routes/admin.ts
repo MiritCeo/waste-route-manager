@@ -75,10 +75,11 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
     let addresses = await prisma.address.findMany({ where });
 
     if (query.wasteType) {
-      addresses = addresses.filter(address =>
-        Array.isArray(address.wasteTypes) &&
-        address.wasteTypes.includes(query.wasteType)
-      );
+      const wasteType = query.wasteType;
+      addresses = addresses.filter(address => {
+        if (!Array.isArray(address.wasteTypes)) return false;
+        return (address.wasteTypes as string[]).includes(wasteType);
+      });
     }
 
     const sortBy = query.sortBy || 'street';
