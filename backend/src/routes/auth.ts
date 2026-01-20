@@ -19,7 +19,9 @@ export const registerAuthRoutes = (app: FastifyInstance) => {
       return reply.status(401).send({ message: 'Nieprawidłowy PIN' });
     }
 
-    const permissions = Array.isArray(user.permissions) ? user.permissions : [];
+    const permissions = Array.isArray(user.permissions)
+      ? (user.permissions.filter((item): item is string => typeof item === 'string'))
+      : [];
     const token = app.jwt.sign({
       sub: user.id,
       role: user.role,
@@ -77,7 +79,9 @@ export const registerAuthRoutes = (app: FastifyInstance) => {
     if (!user) {
       return reply.status(404).send({ message: 'Nie znaleziono użytkownika' });
     }
-    const permissions = Array.isArray(user.permissions) ? user.permissions : [];
+    const permissions = Array.isArray(user.permissions)
+      ? (user.permissions.filter((item): item is string => typeof item === 'string'))
+      : [];
     const token = app.jwt.sign({
       sub: user.id,
       role: user.role,
