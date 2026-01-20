@@ -30,7 +30,9 @@ class AuthService {
       return this.mockLogin(credentials);
     }
 
-    return apiClient.post<LoginResponse>('/auth/login', credentials);
+    const response = await apiClient.post<LoginResponse>('/auth/login', credentials);
+    this.saveAuthData(response.user, response.token);
+    return response;
   }
 
   async logout(): Promise<void> {
