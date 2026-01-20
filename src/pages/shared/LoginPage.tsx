@@ -10,7 +10,7 @@ import { ROUTES } from '@/constants/routes';
 export const LoginPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login } = useAuth();
+  const { login, user } = useAuth();
   
   const [employeeId, setEmployeeId] = useState('');
   const [pin, setPin] = useState('');
@@ -37,6 +37,11 @@ export const LoginPage = () => {
       await login({ employeeId, pin });
       
       // Redirect based on where user came from or to default route
+      if (user?.role === 'ADMIN') {
+        navigate(ROUTES.ADMIN.DASHBOARD, { replace: true });
+        return;
+      }
+
       const from = (location.state as any)?.from?.pathname || ROUTES.DRIVER.ROUTES;
       navigate(from, { replace: true });
     } catch (err: any) {
