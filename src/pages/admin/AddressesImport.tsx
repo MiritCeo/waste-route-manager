@@ -782,30 +782,39 @@ export const AddressesImport = () => {
       });
 
       const toCreate = mergedEntries.filter(entry => !existingKeys.has(buildImportKey(entry)));
-      const { created, skippedExisting } = await adminService.importAddresses(
-        toCreate.map(entry => ({
-          street: entry.street,
-          number: entry.number,
-          city: entry.city,
-          postalCode: entry.postalCode,
-          notes: entry.notes,
-          wasteTypes: entry.wasteTypes.length ? entry.wasteTypes : ['mixed'],
-          declaredContainers: entry.declaredContainers,
-          active: true,
-        }))
-      );
+      const payloads = toCreate.map(entry => ({
+        street: entry.street,
+        number: entry.number,
+        city: entry.city,
+        postalCode: entry.postalCode,
+        notes: entry.notes,
+        wasteTypes: entry.wasteTypes.length ? entry.wasteTypes : ['mixed'],
+        declaredContainers: entry.declaredContainers,
+        active: true,
+      }));
+
+      let createdTotal = 0;
+      let skippedTotal = 0;
+      const chunkSize = 500;
+
+      for (let i = 0; i < payloads.length; i += chunkSize) {
+        const batch = payloads.slice(i, i + chunkSize);
+        const { created, skippedExisting } = await adminService.importAddresses(batch);
+        createdTotal += created;
+        skippedTotal += skippedExisting;
+      }
 
       setSummary({
         totalRows,
         uniqueAddresses: mergedEntries.length,
-        created,
-        skippedExisting: skippedExisting + (mergedEntries.length - toCreate.length),
+        created: createdTotal,
+        skippedExisting: skippedTotal + (mergedEntries.length - toCreate.length),
         duplicates,
         invalidRows,
         invalidEntries,
       });
 
-      toast.success(`Zaimportowano ${created} adresów`);
+      toast.success(`Zaimportowano ${createdTotal} adresów`);
     } catch (error) {
       console.error('Import failed:', error);
       toast.error('Import nie powiódł się');
