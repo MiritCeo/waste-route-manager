@@ -10,7 +10,7 @@ import { ROUTES } from '@/constants/routes';
 export const LoginPage = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login, user } = useAuth();
+  const { login } = useAuth();
   
   const [employeeId, setEmployeeId] = useState('');
   const [pin, setPin] = useState('');
@@ -34,7 +34,7 @@ export const LoginPage = () => {
     setIsLoading(true);
     
     try {
-      await login({ employeeId, pin });
+      const { user } = await login({ employeeId, pin });
       
       // Redirect based on where user came from or to default route
       if (user?.role === 'ADMIN') {

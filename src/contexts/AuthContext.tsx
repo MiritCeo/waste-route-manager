@@ -4,7 +4,7 @@ import { authService } from '@/api/services/auth.service';
 import { toast } from 'sonner';
 
 interface AuthContextType extends AuthState {
-  login: (credentials: LoginCredentials) => Promise<void>;
+  login: (credentials: LoginCredentials) => Promise<LoginResponse>;
   logout: () => Promise<void>;
   checkAuth: () => void;
 }
@@ -55,7 +55,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
 
-  const login = async (credentials: LoginCredentials) => {
+  const login = async (credentials: LoginCredentials): Promise<LoginResponse> => {
     try {
       setState(prev => ({ ...prev, isLoading: true }));
 
@@ -71,6 +71,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       toast.success('Zalogowano pomyślnie', {
         description: `Witaj, ${response.user.name}!`,
       });
+
+      return response;
     } catch (error: any) {
       setState(prev => ({ ...prev, isLoading: false }));
       
