@@ -40,7 +40,7 @@ class AuthService {
       return this.mockLogout();
     }
 
-    await apiClient.post('/auth/logout');
+    await apiClient.post('/auth/logout', {});
     this.clearAuthData();
   }
 
@@ -61,7 +61,7 @@ class AuthService {
       };
     }
 
-    return apiClient.post<LoginResponse>('/auth/refresh');
+    return apiClient.post<LoginResponse>('/auth/refresh', {});
   }
 
   // Helper methods
