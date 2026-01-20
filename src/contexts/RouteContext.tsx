@@ -12,6 +12,7 @@ import { routesService } from '@/api/services/routes.service';
 import { toast } from 'sonner';
 import { storage } from '@/utils/storage';
 import { APP_CONFIG } from '@/constants/config';
+import { useAuth } from './AuthContext';
 
 interface RouteContextType {
   routes: Route[];
@@ -60,10 +61,19 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [selectedWasteTypes, setSelectedWasteTypesState] = useState<WasteType[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { isAuthenticated } = useAuth();
 
   useEffect(() => {
+    if (!isAuthenticated) {
+      setRoutes([]);
+      setSelectedRoute(null);
+      setIsLoading(false);
+      setError(null);
+      return;
+    }
+
     fetchRoutes();
-  }, []);
+  }, [isAuthenticated]);
 
   useEffect(() => {
     const stored = storage.get<{ date: string; types: WasteType[] }>(
@@ -81,6 +91,11 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const fetchRoutes = async () => {
     try {
+      if (!isAuthenticated) {
+        setRoutes([]);
+        return;
+      }
+
       setIsLoading(true);
       setError(null);
 
