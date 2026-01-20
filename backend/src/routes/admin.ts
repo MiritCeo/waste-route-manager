@@ -43,7 +43,6 @@ const buildImportKey = (data: {
 };
 
 export const registerAdminRoutes = (app: FastifyInstance) => {
-  app.addHook('preHandler', app.authenticate);
 
   app.get('/admin/addresses', async (request) => {
     const query = request.query as {

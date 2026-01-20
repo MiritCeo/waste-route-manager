@@ -26,7 +26,15 @@ app.get('/api/health', async () => ({ status: 'ok' }));
 
 app.register(async (instance) => {
   registerAuthRoutes(instance);
+}, { prefix: '/api' });
+
+app.register(async (instance) => {
+  instance.addHook('preHandler', instance.authenticate);
   registerAdminRoutes(instance);
+}, { prefix: '/api' });
+
+app.register(async (instance) => {
+  instance.addHook('preHandler', instance.authenticate);
   registerDriverRoutes(instance);
 }, { prefix: '/api' });
 
