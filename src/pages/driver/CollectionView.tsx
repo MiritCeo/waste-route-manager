@@ -7,6 +7,7 @@ import { Check, MapPin, AlertTriangle, PauseCircle, Camera } from 'lucide-react'
 import { cn } from '@/lib/utils';
 import { useRoutes } from '@/contexts/RouteContext';
 import { ROUTES } from '@/constants/routes';
+import { WASTE_OPTIONS } from '@/constants/waste';
 import { toast } from 'sonner';
 import { ISSUE_REASON_LABELS, ISSUE_FLAG_LABELS } from '@/constants/collection';
 
@@ -32,11 +33,30 @@ export const CollectionView = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isDraftLocked, setIsDraftLocked] = useState(false);
 
+  const mergeWasteForSelection = (items: WasteCategory[], types: WasteType[]) => {
+    if (types.length === 0) return items;
+    const map = new Map(items.map(item => [item.id, item]));
+    types.forEach(type => {
+      if (map.has(type)) return;
+      const option = WASTE_OPTIONS.find(entry => entry.id === type);
+      map.set(type, {
+        id: type,
+        name: option?.name || type,
+        icon: option?.icon || '🗑️',
+        count: 0,
+      });
+    });
+    return Array.from(map.values());
+  };
+
   const visibleWaste = useMemo(() => {
     if (selectedWasteTypes.length === 0) {
       return waste;
     }
-    return waste.filter(item => selectedWasteTypes.includes(item.id));
+    const map = new Map(waste.map(item => [item.id, item]));
+    return selectedWasteTypes
+      .map(type => map.get(type))
+      .filter((item): item is WasteCategory => Boolean(item));
   }, [waste, selectedWasteTypes]);
 
   // Calculate total count - MUST be before conditional returns
@@ -60,7 +80,7 @@ export const CollectionView = () => {
     const foundAddress = selectedRoute.addresses.find(a => a.id === addressId);
     if (foundAddress) {
       setAddress(foundAddress);
-      setWaste(foundAddress.waste);
+      setWaste(mergeWasteForSelection(foundAddress.waste, selectedWasteTypes));
       const initialStatus = foundAddress.status ?? (foundAddress.isCollected ? 'COLLECTED' : 'PENDING');
       setStatus(initialStatus === 'PENDING' ? 'COLLECTED' : initialStatus);
       setIssueReason(foundAddress.issueReason || '');
@@ -72,7 +92,7 @@ export const CollectionView = () => {
       if (routeId) {
         const draft = getCollectionDraft(routeId, addressId);
         if (draft) {
-          setWaste(draft.waste);
+          setWaste(mergeWasteForSelection(draft.waste, selectedWasteTypes));
           setStatus(draft.status ?? 'COLLECTED');
           setIssueReason(draft.issueReason || '');
           setIssueFlags(draft.issueFlags || []);
@@ -85,7 +105,7 @@ export const CollectionView = () => {
       navigate(`/driver/route/${routeId}`);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [addressId]); // Only re-run when addressId changes
+  }, [addressId, selectedWasteTypes]); // Keep waste list aligned with selection
 
   const handleBack = () => {
     navigate(`/driver/route/${routeId}`);
