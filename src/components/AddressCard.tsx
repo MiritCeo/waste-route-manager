@@ -25,6 +25,7 @@ export const AddressCard = ({ address, hasDraft, onClick }: AddressCardProps) =>
   const isCollected = status === 'COLLECTED';
   const isIssue = status === 'ISSUE';
   const isDeferred = status === 'DEFERRED';
+  const isCompany = Boolean(address.ownerName);
 
   return (
     <button
@@ -86,6 +87,11 @@ export const AddressCard = ({ address, hasDraft, onClick }: AddressCardProps) =>
           )}>
             {STATUS_LABELS[status]}
           </span>
+          {isCompany && (
+            <span className="px-2 py-0.5 rounded-full text-xs font-medium border border-blue-500/30 text-blue-500">
+              Firma
+            </span>
+          )}
           {hasDraft && (
             <span className="px-2 py-0.5 rounded-full text-xs font-medium border border-primary/30 text-primary">
               Zapis roboczy
