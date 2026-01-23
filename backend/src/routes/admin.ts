@@ -2,6 +2,7 @@ import { FastifyInstance } from 'fastify';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../db.js';
 import { buildWasteCategories, WASTE_OPTIONS } from '../utils/waste.js';
+import { DEFAULT_ISSUE_CONFIG } from '../utils/issueConfig.js';
 
 const normalizeText = (value?: string) =>
   (value || '')
@@ -62,13 +63,21 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
       where.active = query.active === 'true';
     }
     if (query.search) {
-      const search = query.search;
-      where.OR = [
-        { street: { contains: search } },
-        { city: { contains: search } },
-        { number: { contains: search } },
-        { postalCode: { contains: search } },
-      ];
+      const normalized = query.search
+        .replace(/[,.]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const tokens = normalized.split(' ').filter(Boolean);
+      if (tokens.length > 0) {
+        where.AND = tokens.map(token => ({
+          OR: [
+            { street: { contains: token } },
+            { city: { contains: token } },
+            { number: { contains: token } },
+            { postalCode: { contains: token } },
+          ],
+        }));
+      }
     }
 
     let addresses = await prisma.address.findMany({ where });
@@ -105,6 +114,7 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
       notes: address.notes || undefined,
       wasteTypes: address.wasteTypes,
       declaredContainers: address.declaredContainers || undefined,
+      composting: address.composting || undefined,
       active: address.active,
       createdAt: address.createdAt.toISOString(),
     }));
@@ -124,6 +134,7 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
         notes: body.notes || null,
         wasteTypes: body.wasteTypes,
         declaredContainers: body.declaredContainers || null,
+        composting: body.composting || null,
         active: body.active ?? true,
       },
     });
@@ -136,6 +147,7 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
       notes: address.notes || undefined,
       wasteTypes: address.wasteTypes,
       declaredContainers: address.declaredContainers || undefined,
+      composting: address.composting || undefined,
       active: address.active,
       createdAt: address.createdAt.toISOString(),
     };
@@ -158,6 +170,7 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
         notes: body.notes ?? address.notes,
         wasteTypes: body.wasteTypes ?? address.wasteTypes,
         declaredContainers: body.declaredContainers ?? address.declaredContainers,
+        composting: body.composting ?? address.composting,
         active: typeof body.active === 'boolean' ? body.active : address.active,
       },
     });
@@ -170,6 +183,7 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
       notes: updated.notes || undefined,
       wasteTypes: updated.wasteTypes,
       declaredContainers: updated.declaredContainers || undefined,
+      composting: updated.composting || undefined,
       active: updated.active,
       createdAt: updated.createdAt.toISOString(),
     };
@@ -193,20 +207,21 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
     const body = request.body as { addresses?: any[] };
     const items = body.addresses || [];
     const existing = await prisma.address.findMany();
-    const existingKeys = new Set(
-      existing.map(address =>
+    const existingByKey = new Map(
+      existing.map(address => [
         buildImportKey({
           street: address.street,
           number: address.number,
           city: address.city,
           postalCode: address.postalCode,
           notes: address.notes,
-        })
-      )
+        }),
+        address,
+      ])
     );
 
     let created = 0;
-    let skippedExisting = 0;
+    let updated = 0;
 
     for (const item of items) {
       const key = buildImportKey({
@@ -216,11 +231,25 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
         postalCode: item.postalCode,
         notes: item.notes,
       });
-      if (existingKeys.has(key)) {
-        skippedExisting += 1;
+      const existingAddress = existingByKey.get(key);
+      if (existingAddress) {
+        await prisma.address.update({
+          where: { id: existingAddress.id },
+          data: {
+            street: item.street,
+            number: item.number,
+            city: item.city,
+            postalCode: item.postalCode || null,
+            notes: item.notes || null,
+            wasteTypes: item.wasteTypes || [],
+            declaredContainers: item.declaredContainers || null,
+            composting: item.composting || null,
+            active: item.active ?? true,
+          },
+        });
+        updated += 1;
         continue;
       }
-      existingKeys.add(key);
       await prisma.address.create({
         data: {
           street: item.street,
@@ -230,6 +259,7 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
           notes: item.notes || null,
           wasteTypes: item.wasteTypes || [],
           declaredContainers: item.declaredContainers || null,
+          composting: item.composting || null,
           active: item.active ?? true,
         },
       });
@@ -238,7 +268,8 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
 
     return {
       created,
-      skippedExisting,
+      updated,
+      skippedExisting: 0,
       totalProcessed: items.length,
     };
   });
@@ -486,16 +517,18 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
   });
 
   app.get('/admin/issues', async (request) => {
-    const query = request.query as { status?: string };
-    const issues = await prisma.routeAddress.findMany({
+    const query = request.query as { status?: string; archived?: string };
+    const issues: any[] = await prisma.routeAddress.findMany({
       where: {
         status: query.status ? query.status : { in: ['ISSUE', 'DEFERRED'] },
+        issueArchivedAt: query.archived === 'true' ? { not: null } : null,
       },
       include: {
         route: true,
         address: true,
+        issueReportedBy: true,
       },
-    });
+    } as any);
     return issues.map(item => ({
       id: `${item.routeId}-${item.addressId}`,
       routeId: item.routeId,
@@ -509,9 +542,61 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
       issueFlags: item.issueFlags || [],
       issueNote: item.issueNote,
       issuePhoto: item.issuePhoto,
-      reportToAdmin: item.reportToAdmin,
+      issueReportedAt: item.issueReportedAt?.toISOString(),
+      issueReportedBy: item.issueReportedBy
+        ? {
+            id: item.issueReportedBy.id,
+            employeeId: item.issueReportedBy.employeeId,
+            name: item.issueReportedBy.name,
+          }
+        : undefined,
+      issueArchivedAt: item.issueArchivedAt?.toISOString(),
       createdAt: item.route.date?.toISOString() || new Date().toISOString(),
     }));
+  });
+
+  app.patch('/admin/issues/:routeId/:addressId/archive', async (request, reply) => {
+    const { routeId, addressId } = request.params as { routeId: string; addressId: string };
+    const issue: any = await prisma.routeAddress.findFirst({
+      where: { routeId, addressId },
+    } as any);
+    if (!issue) {
+      return reply.status(404).send({ message: 'Nie znaleziono zgłoszenia' });
+    }
+    const updated: any = await prisma.routeAddress.update({
+      where: { id: issue.id },
+      data: { issueArchivedAt: new Date() },
+    } as any);
+    return {
+      routeId,
+      addressId,
+      issueArchivedAt: updated.issueArchivedAt?.toISOString(),
+    };
+  });
+
+  app.put('/admin/issues/config', async (request) => {
+    const body = request.body as any;
+    const issueReasons = Array.isArray(body?.issueReasons) ? body.issueReasons : [];
+    const deferredReasons = Array.isArray(body?.deferredReasons) ? body.deferredReasons : [];
+    const issueFlags = Array.isArray(body?.issueFlags) ? body.issueFlags : [];
+
+    const existing = await prisma.issueConfig.findFirst();
+    const data = {
+      issueReasons,
+      deferredReasons,
+      issueFlags,
+    };
+
+    const saved = existing
+      ? await prisma.issueConfig.update({ where: { id: existing.id }, data })
+      : await prisma.issueConfig.create({ data: { ...DEFAULT_ISSUE_CONFIG, ...data } });
+
+    return {
+      issueReasons: saved.issueReasons || issueReasons,
+      deferredReasons: saved.deferredReasons || deferredReasons,
+      issueFlags: saved.issueFlags || issueFlags,
+      updatedAt: saved.updatedAt.toISOString(),
+    };
   });
 
   app.get('/admin/daily-stats', async (request) => {

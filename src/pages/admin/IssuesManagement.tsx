@@ -4,7 +4,9 @@ import { Header } from '@/components/Header';
 import { AdminHeaderRight } from '@/components/AdminHeaderRight';
 import { adminService } from '@/api/services/admin.service';
 import { IssueReport } from '@/types/admin';
-import { ISSUE_FLAG_LABELS, ISSUE_REASON_LABELS } from '@/constants/collection';
+import { issueConfigService } from '@/api/services/issue-config.service';
+import { DEFAULT_ISSUE_CONFIG } from '@/constants/issueConfig';
+import { ROUTES } from '@/constants/routes';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -14,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { AlertTriangle, MapPin, PauseCircle, Search } from 'lucide-react';
+import { AlertTriangle, MapPin, PauseCircle, Search, Settings as SettingsIcon, Archive } from 'lucide-react';
 import { toast } from 'sonner';
 
 export const IssuesManagement = () => {
@@ -23,11 +25,26 @@ export const IssuesManagement = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ISSUE' | 'DEFERRED'>('ALL');
-  const [reportedFilter, setReportedFilter] = useState<'ALL' | 'REPORTED' | 'UNREPORTED'>('ALL');
+  const [issueConfig, setIssueConfig] = useState(DEFAULT_ISSUE_CONFIG);
 
   useEffect(() => {
     loadIssues();
-  }, [search, statusFilter, reportedFilter]);
+  }, [search, statusFilter]);
+
+  useEffect(() => {
+    let isMounted = true;
+    issueConfigService
+      .getIssueConfig()
+      .then((config) => {
+        if (isMounted) setIssueConfig(config);
+      })
+      .catch(() => {
+        toast.error('Nie udało się pobrać listy powodów');
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   const loadIssues = async () => {
     try {
@@ -35,7 +52,7 @@ export const IssuesManagement = () => {
       const data = await adminService.getIssueReports({
         search: search || undefined,
         status: statusFilter === 'ALL' ? undefined : statusFilter,
-        reported: reportedFilter === 'ALL' ? undefined : reportedFilter === 'REPORTED',
+        archived: false,
       });
       setIssues(data);
     } catch (error) {
@@ -51,9 +68,29 @@ export const IssuesManagement = () => {
       total: issues.length,
       issues: issues.filter(item => item.status === 'ISSUE').length,
       deferred: issues.filter(item => item.status === 'DEFERRED').length,
-      reported: issues.filter(item => item.reportToAdmin).length,
     };
   }, [issues]);
+
+  const reasonLabels = useMemo(() => {
+    const entries = [...issueConfig.issueReasons, ...issueConfig.deferredReasons];
+    return new Map(entries.map(item => [item.id, item.label]));
+  }, [issueConfig]);
+
+  const flagLabels = useMemo(
+    () => new Map(issueConfig.issueFlags.map(item => [item.id, item.label])),
+    [issueConfig]
+  );
+
+  const handleArchive = async (routeId: string, addressId: string) => {
+    try {
+      await adminService.archiveIssue(routeId, addressId);
+      setIssues(prev => prev.filter(issue => !(issue.routeId === routeId && issue.addressId === addressId)));
+      toast.success('Zgłoszenie zarchiwizowane');
+    } catch (error) {
+      console.error('Failed to archive issue:', error);
+      toast.error('Nie udało się zarchiwizować zgłoszenia');
+    }
+  };
 
   if (isLoading) {
     return (
@@ -69,14 +106,25 @@ export const IssuesManagement = () => {
   return (
     <div className="min-h-screen bg-background">
       <Header
-        title="Zgłoszenia z terenu"
+        title="Powiadomienia"
         subtitle={`${groupedStats.total} wpisów`}
         onBack={() => navigate(-1)}
         rightElement={<AdminHeaderRight />}
       />
 
       <main className="p-4 pb-8 space-y-4 max-w-7xl mx-auto">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <div className="flex justify-end">
+          <Button
+            type="button"
+            variant="outline"
+            className="gap-2"
+            onClick={() => navigate(ROUTES.ADMIN.SETTINGS)}
+          >
+            <SettingsIcon className="w-4 h-4" />
+            Ustawienia zgłoszeń
+          </Button>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
           <div className="bg-card rounded-2xl p-4 border border-border">
             <p className="text-xs text-muted-foreground">Zgłoszenia</p>
             <p className="text-2xl font-bold text-foreground">{groupedStats.total}</p>
@@ -88,10 +136,6 @@ export const IssuesManagement = () => {
           <div className="bg-card rounded-2xl p-4 border border-border">
             <p className="text-xs text-muted-foreground">Odłożone</p>
             <p className="text-2xl font-bold text-warning">{groupedStats.deferred}</p>
-          </div>
-          <div className="bg-card rounded-2xl p-4 border border-border">
-            <p className="text-xs text-muted-foreground">Zgłoszone do admina</p>
-            <p className="text-2xl font-bold text-foreground">{groupedStats.reported}</p>
           </div>
         </div>
 
@@ -113,16 +157,6 @@ export const IssuesManagement = () => {
               <SelectItem value="ALL">Wszystkie</SelectItem>
               <SelectItem value="ISSUE">Problemy</SelectItem>
               <SelectItem value="DEFERRED">Odłożone</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={reportedFilter} onValueChange={(value) => setReportedFilter(value as typeof reportedFilter)}>
-            <SelectTrigger className="w-full md:w-56">
-              <SelectValue placeholder="Zgłoszenie do admina" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="ALL">Wszystkie</SelectItem>
-              <SelectItem value="REPORTED">Zgłoszone</SelectItem>
-              <SelectItem value="UNREPORTED">Niezgłoszone</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -157,6 +191,12 @@ export const IssuesManagement = () => {
                     <p className="text-xs text-muted-foreground mt-1">
                       Trasa: {issue.routeName}
                     </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Zgłosił: {issue.issueReportedBy?.name || 'Nieznany'} ({issue.issueReportedBy?.employeeId || '—'})
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {new Date(issue.issueReportedAt || issue.createdAt).toLocaleString('pl-PL')}
+                    </p>
                   </div>
                 </div>
                 <span
@@ -173,19 +213,14 @@ export const IssuesManagement = () => {
               <div className="flex flex-wrap gap-2">
                 {issue.issueReason && (
                   <span className="px-2 py-0.5 rounded-full text-xs font-medium border bg-muted/40 text-muted-foreground">
-                    {ISSUE_REASON_LABELS[issue.issueReason]}
+                    {reasonLabels.get(issue.issueReason) || issue.issueReason}
                   </span>
                 )}
                 {issue.issueFlags?.map(flag => (
                   <span key={flag} className="px-2 py-0.5 rounded-full text-xs font-medium border bg-muted/40 text-muted-foreground">
-                    {ISSUE_FLAG_LABELS[flag]}
+                    {flagLabels.get(flag) || flag}
                   </span>
                 ))}
-                {issue.reportToAdmin && (
-                  <span className="px-2 py-0.5 rounded-full text-xs font-medium border border-primary/30 text-primary">
-                    Zgłoszone do admina
-                  </span>
-                )}
               </div>
 
               {issue.issueNote && (
@@ -199,6 +234,18 @@ export const IssuesManagement = () => {
                   <img src={issue.issuePhoto} alt="Zgłoszone zdjęcie" className="w-full max-h-64 object-cover" />
                 </div>
               )}
+
+              <div className="flex items-center justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-2"
+                  onClick={() => handleArchive(issue.routeId, issue.addressId)}
+                >
+                  <Archive className="w-4 h-4" />
+                  Archiwizuj
+                </Button>
+              </div>
 
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <MapPin className="w-4 h-4" />

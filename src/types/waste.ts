@@ -1,26 +1,28 @@
 export type WasteType = 
   | 'bio-green'
+  | 'bio-green-240'
+  | 'bio-green-1100'
   | 'bio-kitchen'
+  | 'bio-kitchen-240'
+  | 'bio-kitchen-1100'
   | 'glass-clear'
+  | 'glass-clear-1100'
   | 'glass-colored'
+  | 'glass-colored-1100'
   | 'paper'
+  | 'paper-1100'
   | 'plastic'
+  | 'plastic-1100'
   | 'ash'
-  | 'mixed';
+  | 'mixed'
+  | 'mixed-240'
+  | 'mixed-1100';
 
 export type AddressStatus = 'PENDING' | 'COLLECTED' | 'DEFERRED' | 'ISSUE';
 
-export type AddressIssueReason =
-  | 'NO_ACCESS'
-  | 'NO_BIN'
-  | 'CLOSED'
-  | 'ROADWORKS'
-  | 'NO_ENTRY';
+export type AddressIssueReason = string;
 
-export type AddressIssueFlag =
-  | 'DAMAGED_BIN'
-  | 'OVERFLOW'
-  | 'NO_SEGREGATION';
+export type AddressIssueFlag = string;
 
 export interface WasteCategory {
   id: WasteType;
@@ -41,7 +43,7 @@ export interface Address {
   issueFlags?: AddressIssueFlag[];
   issueNote?: string;
   issuePhoto?: string;
-  reportToAdmin?: boolean;
+  ownerName?: string;
 }
 
 export interface Route {

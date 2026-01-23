@@ -43,7 +43,7 @@ interface CollectionDetails {
   issueFlags?: AddressIssueFlag[];
   issueNote?: string;
   issuePhoto?: string;
-  reportToAdmin?: boolean;
+  issuePhotoFile?: File;
 }
 
 interface CollectionDraft extends CollectionDetails {
@@ -156,7 +156,7 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   ) => {
     try {
       // Update via API
-      await routesService.updateAddressCollection(routeId, addressId, waste, details);
+      const updatedAddress = await routesService.updateAddressCollection(routeId, addressId, waste, details);
 
       // Update local state
       setRoutes(prevRoutes =>
@@ -167,14 +167,13 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             if (addr.id !== addressId) return addr;
             return {
               ...addr,
-              waste,
-              status: details?.status ?? 'COLLECTED',
-              isCollected: (details?.status ?? 'COLLECTED') === 'COLLECTED',
-              issueReason: details?.issueReason,
-              issueFlags: details?.issueFlags ?? addr.issueFlags,
-              issueNote: details?.issueNote,
-              issuePhoto: details?.issuePhoto,
-              reportToAdmin: details?.reportToAdmin ?? addr.reportToAdmin,
+              waste: updatedAddress.waste ?? waste,
+              status: updatedAddress.status ?? details?.status ?? 'COLLECTED',
+              isCollected: (updatedAddress.status ?? details?.status ?? 'COLLECTED') === 'COLLECTED',
+              issueReason: updatedAddress.issueReason ?? undefined,
+              issueFlags: updatedAddress.issueFlags ?? [],
+              issueNote: updatedAddress.issueNote ?? undefined,
+              issuePhoto: updatedAddress.issuePhoto ?? undefined,
             };
           });
 
@@ -194,14 +193,13 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           if (addr.id !== addressId) return addr;
           return {
             ...addr,
-            waste,
-            status: details?.status ?? 'COLLECTED',
-            isCollected: (details?.status ?? 'COLLECTED') === 'COLLECTED',
-            issueReason: details?.issueReason,
-            issueFlags: details?.issueFlags ?? addr.issueFlags,
-            issueNote: details?.issueNote,
-            issuePhoto: details?.issuePhoto,
-            reportToAdmin: details?.reportToAdmin ?? addr.reportToAdmin,
+            waste: updatedAddress.waste ?? waste,
+            status: updatedAddress.status ?? details?.status ?? 'COLLECTED',
+            isCollected: (updatedAddress.status ?? details?.status ?? 'COLLECTED') === 'COLLECTED',
+            issueReason: updatedAddress.issueReason ?? undefined,
+            issueFlags: updatedAddress.issueFlags ?? [],
+            issueNote: updatedAddress.issueNote ?? undefined,
+            issuePhoto: updatedAddress.issuePhoto ?? undefined,
           };
         });
 

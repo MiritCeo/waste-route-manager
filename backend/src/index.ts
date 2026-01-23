@@ -1,6 +1,7 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import jwt from '@fastify/jwt';
+import multipart from '@fastify/multipart';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerDriverRoutes } from './routes/routes.js';
@@ -9,6 +10,12 @@ const app = Fastify({ logger: true, bodyLimit: 50 * 1024 * 1024 });
 
 await app.register(cors, {
   origin: true,
+});
+
+await app.register(multipart, {
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+  },
 });
 
 const jwtSecret = process.env.JWT_SECRET || 'change_me';

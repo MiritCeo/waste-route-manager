@@ -7,7 +7,7 @@ import logo from '@/assets/kompaktowy-pleszew-logo.png';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRoutes } from '@/contexts/RouteContext';
 import { ROUTES } from '@/constants/routes';
-import { WASTE_OPTIONS } from '@/constants/waste';
+import { BASE_WASTE_OPTIONS } from '@/constants/waste';
 import { WasteType } from '@/types/waste';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -27,7 +27,7 @@ export const RouteSelection = () => {
   const selectedWasteLabel = useMemo(() => {
     if (selectedWasteTypes.length === 0) return 'Brak wyboru';
     return selectedWasteTypes
-      .map(type => WASTE_OPTIONS.find(option => option.id === type)?.name || type)
+      .map(type => BASE_WASTE_OPTIONS.find(option => option.id === type)?.name || type)
       .join(', ');
   }, [selectedWasteTypes]);
 
@@ -69,7 +69,7 @@ export const RouteSelection = () => {
   };
 
   const handleSelectAll = () => {
-    setSelectionDraft(WASTE_OPTIONS.map(option => option.id));
+    setSelectionDraft(BASE_WASTE_OPTIONS.map(option => option.id));
   };
 
   const handleClearAll = () => {
@@ -164,7 +164,7 @@ export const RouteSelection = () => {
               </Button>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              {WASTE_OPTIONS.map(option => {
+              {BASE_WASTE_OPTIONS.map(option => {
                 const isChecked = selectionDraft.includes(option.id);
                 return (
                   <button

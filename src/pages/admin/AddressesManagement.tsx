@@ -50,6 +50,7 @@ const addressSchema = z.object({
   city: z.string().min(2, 'Podaj miasto'),
   postalCode: z.string().optional().or(z.literal('')),
   notes: z.string().optional().or(z.literal('')),
+  composting: z.string().optional().or(z.literal('')),
   wasteTypes: z.array(wasteEnum).min(1, 'Wybierz przynajmniej jeden typ odpadu'),
   active: z.boolean(),
 });
@@ -78,7 +79,15 @@ export const AddressesManagement = () => {
       city: '',
       postalCode: '',
       notes: '',
-      wasteTypes: [],
+      composting: '',
+      wasteTypes: [
+        'mixed',
+        'mixed-240',
+        'bio-green',
+        'bio-green-240',
+        'bio-kitchen',
+        'bio-kitchen-240',
+      ],
       active: true,
     },
   });
@@ -116,6 +125,8 @@ export const AddressesManagement = () => {
     return Array.from(uniqueCities.values());
   }, [addresses]);
 
+  const visibleWasteOptions = useMemo(() => WASTE_OPTIONS, []);
+
   const sortedAddresses = useMemo(() => {
     const list = [...addresses];
     list.sort((a, b) => {
@@ -148,7 +159,14 @@ export const AddressesManagement = () => {
       city: '',
       postalCode: '',
       notes: '',
-      wasteTypes: [],
+      wasteTypes: [
+        'mixed',
+        'mixed-240',
+        'bio-green',
+        'bio-green-240',
+        'bio-kitchen',
+        'bio-kitchen-240',
+      ],
       active: true,
     });
     setIsDialogOpen(true);
@@ -162,6 +180,7 @@ export const AddressesManagement = () => {
       city: address.city,
       postalCode: address.postalCode || '',
       notes: address.notes || '',
+      composting: address.composting || '',
       wasteTypes: address.wasteTypes,
       active: address.active,
     });
@@ -177,6 +196,7 @@ export const AddressesManagement = () => {
           city: normalizeCityName(values.city),
           postalCode: values.postalCode || undefined,
           notes: values.notes || undefined,
+          composting: values.composting || undefined,
           wasteTypes: values.wasteTypes,
           active: values.active,
         });
@@ -188,6 +208,7 @@ export const AddressesManagement = () => {
           city: normalizeCityName(values.city),
           postalCode: values.postalCode || undefined,
           notes: values.notes || undefined,
+          composting: values.composting || undefined,
           wasteTypes: values.wasteTypes,
           active: values.active,
         });
@@ -216,17 +237,6 @@ export const AddressesManagement = () => {
       toast.error(error?.message || 'Nie udało się usunąć adresu');
     }
   };
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <div className="w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full animate-spin mx-auto" />
-          <p className="text-muted-foreground">Ładowanie adresów...</p>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -344,6 +354,13 @@ export const AddressesManagement = () => {
             </SelectContent>
           </Select>
         </div>
+
+        {isLoading && (
+          <div className="bg-card rounded-2xl p-4 border border-border flex items-center gap-3">
+            <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
+            <p className="text-sm text-muted-foreground">Ładowanie adresów...</p>
+          </div>
+        )}
 
         <div className="space-y-3">
           {paginatedAddresses.map(address => (
@@ -536,12 +553,40 @@ export const AddressesManagement = () => {
 
               <FormField
                 control={form.control}
+                name="composting"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Kompostownik</FormLabel>
+                    <FormControl>
+                      <Select
+                        value={field.value ? field.value : 'unknown'}
+                        onValueChange={(value) =>
+                          field.onChange(value === 'unknown' ? '' : value)
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Wybierz wartość" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="unknown">Brak danych</SelectItem>
+                          <SelectItem value="Tak">Tak</SelectItem>
+                          <SelectItem value="Nie">Nie</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
                 name="wasteTypes"
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Typy odpadów</FormLabel>
                     <div className="grid gap-2 md:grid-cols-2">
-                      {WASTE_OPTIONS.map(option => {
+                      {visibleWasteOptions.map(option => {
                         const isChecked = field.value.includes(option.id);
                         return (
                           <label key={option.id} className="flex items-center gap-2 text-sm">

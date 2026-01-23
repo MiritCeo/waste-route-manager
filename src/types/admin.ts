@@ -117,6 +117,7 @@ export interface AdminAddress {
   city: string;
   postalCode?: string;
   notes?: string;
+  composting?: string;
   wasteTypes: WasteType[];
   declaredContainers?: DeclaredContainer[];
   active: boolean;
@@ -142,7 +143,13 @@ export interface IssueReport {
   issueFlags?: AddressIssueFlag[];
   issueNote?: string;
   issuePhoto?: string;
-  reportToAdmin?: boolean;
+  issueReportedAt?: string;
+  issueReportedBy?: {
+    id: string;
+    employeeId: string;
+    name: string;
+  };
+  issueArchivedAt?: string;
   createdAt: string;
 }
 
@@ -161,6 +168,7 @@ export interface DeclaredContainer {
 
 export interface ImportAddressesResult {
   created: number;
+  updated: number;
   skippedExisting: number;
   totalProcessed: number;
 }

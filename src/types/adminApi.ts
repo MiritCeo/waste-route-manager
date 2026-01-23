@@ -22,7 +22,7 @@ export interface AdminRoutesQuery extends QueryParams {
 export interface AdminIssuesQuery extends QueryParams {
   status?: 'ISSUE' | 'DEFERRED';
   reason?: string;
-  reported?: boolean;
+  archived?: boolean;
 }
 
 export interface DailyStatsQuery extends QueryParams {
@@ -93,6 +93,7 @@ export interface CreateAddressDto {
   city: string;
   postalCode?: string;
   notes?: string;
+  composting?: string;
   wasteTypes: WasteType[];
   declaredContainers?: DeclaredContainer[];
   active?: boolean;
@@ -104,6 +105,7 @@ export interface UpdateAddressDto {
   city?: string;
   postalCode?: string;
   notes?: string;
+  composting?: string;
   wasteTypes?: WasteType[];
   declaredContainers?: DeclaredContainer[];
   active?: boolean;

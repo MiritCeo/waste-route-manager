@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Address, WasteCategory, AddressStatus, AddressIssueReason, AddressIssueFlag } from '@/types/waste';
+import { Address, WasteCategory, AddressStatus, AddressIssueReason, AddressIssueFlag, WasteType } from '@/types/waste';
 import { WasteCounter } from '@/components/WasteCounter';
 import { Header } from '@/components/Header';
 import { Check, MapPin, AlertTriangle, PauseCircle, Camera } from 'lucide-react';
@@ -9,7 +9,8 @@ import { useRoutes } from '@/contexts/RouteContext';
 import { ROUTES } from '@/constants/routes';
 import { WASTE_OPTIONS } from '@/constants/waste';
 import { toast } from 'sonner';
-import { ISSUE_REASON_LABELS, ISSUE_FLAG_LABELS } from '@/constants/collection';
+import { issueConfigService } from '@/api/services/issue-config.service';
+import { DEFAULT_ISSUE_CONFIG } from '@/constants/issueConfig';
 
 export const CollectionView = () => {
   const { routeId, addressId } = useParams<{ routeId: string; addressId: string }>();
@@ -29,14 +30,31 @@ export const CollectionView = () => {
   const [issueFlags, setIssueFlags] = useState<AddressIssueFlag[]>([]);
   const [issueNote, setIssueNote] = useState('');
   const [issuePhoto, setIssuePhoto] = useState<string | undefined>(undefined);
-  const [reportToAdmin, setReportToAdmin] = useState(false);
+  const [issuePhotoFile, setIssuePhotoFile] = useState<File | undefined>(undefined);
+  const [issueConfig, setIssueConfig] = useState(DEFAULT_ISSUE_CONFIG);
   const [isSaving, setIsSaving] = useState(false);
   const [isDraftLocked, setIsDraftLocked] = useState(false);
+  const isCompanyAddress = useMemo(
+    () => Boolean(address?.notes?.includes('Typ: Firma') || address?.notes?.includes('Właściciel:')),
+    [address]
+  );
+
+  const expandWasteSelection = (types: WasteType[]) => {
+    const expanded = new Set<WasteType>();
+    types.forEach(type => {
+      expanded.add(type);
+      if (type === 'bio-green' || type === 'bio-kitchen' || type === 'mixed') {
+        expanded.add(`${type}-240` as WasteType);
+      }
+    });
+    return Array.from(expanded);
+  };
 
   const mergeWasteForSelection = (items: WasteCategory[], types: WasteType[]) => {
     if (types.length === 0) return items;
     const map = new Map(items.map(item => [item.id, item]));
-    types.forEach(type => {
+    const expandedTypes = expandWasteSelection(types);
+    expandedTypes.forEach(type => {
       if (map.has(type)) return;
       const option = WASTE_OPTIONS.find(entry => entry.id === type);
       map.set(type, {
@@ -53,16 +71,58 @@ export const CollectionView = () => {
     if (selectedWasteTypes.length === 0) {
       return waste;
     }
-    const map = new Map(waste.map(item => [item.id, item]));
-    return selectedWasteTypes
-      .map(type => map.get(type))
-      .filter((item): item is WasteCategory => Boolean(item));
-  }, [waste, selectedWasteTypes]);
+    if (isCompanyAddress) {
+      return waste;
+    }
+    const selected = new Set(selectedWasteTypes);
+    return waste.filter(item => {
+      if (selected.has(item.id)) return true;
+      return Array.from(selected).some(type => item.id.startsWith(`${type}-`));
+    });
+  }, [waste, selectedWasteTypes, isCompanyAddress]);
+
+  const sortedVisibleWaste = useMemo(() => {
+    const baseOrder = ['mixed', 'bio-green', 'bio-kitchen', 'paper', 'plastic', 'glass-clear', 'glass-colored', 'ash'];
+    const sizeOrder: Record<string, number> = { '': 0, '120': 0, '240': 1, '1100': 2 };
+
+    const parseItem = (id: string) => {
+      const match = id.match(/^(.*?)(?:-(\d+))?$/);
+      const base = match?.[1] || id;
+      const size = match?.[2] || '';
+      return { base, size };
+    };
+
+    return [...visibleWaste].sort((a, b) => {
+      const aParsed = parseItem(a.id);
+      const bParsed = parseItem(b.id);
+      const baseDiff =
+        (baseOrder.indexOf(aParsed.base) === -1 ? 999 : baseOrder.indexOf(aParsed.base)) -
+        (baseOrder.indexOf(bParsed.base) === -1 ? 999 : baseOrder.indexOf(bParsed.base));
+      if (baseDiff !== 0) return baseDiff;
+      return (sizeOrder[aParsed.size] ?? 99) - (sizeOrder[bParsed.size] ?? 99);
+    });
+  }, [visibleWaste]);
 
   // Calculate total count - MUST be before conditional returns
   const totalCount = useMemo(() => {
     return visibleWaste.reduce((sum, w) => sum + w.count, 0);
   }, [visibleWaste]);
+
+  // Load issue config
+  useEffect(() => {
+    let isMounted = true;
+    issueConfigService
+      .getIssueConfig()
+      .then((config) => {
+        if (isMounted) setIssueConfig(config);
+      })
+      .catch(() => {
+        toast.error('Nie udało się pobrać listy powodów');
+      });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // Load address on mount
   useEffect(() => {
@@ -87,7 +147,7 @@ export const CollectionView = () => {
       setIssueFlags(foundAddress.issueFlags || []);
       setIssueNote(foundAddress.issueNote || '');
       setIssuePhoto(foundAddress.issuePhoto);
-      setReportToAdmin(foundAddress.reportToAdmin ?? false);
+      setIssuePhotoFile(undefined);
 
       if (routeId) {
         const draft = getCollectionDraft(routeId, addressId);
@@ -98,7 +158,7 @@ export const CollectionView = () => {
           setIssueFlags(draft.issueFlags || []);
           setIssueNote(draft.issueNote || '');
           setIssuePhoto(draft.issuePhoto);
-          setReportToAdmin(draft.reportToAdmin ?? false);
+          setIssuePhotoFile(undefined);
         }
       }
     } else {
@@ -159,7 +219,7 @@ export const CollectionView = () => {
         issueFlags: status === 'ISSUE' ? issueFlags : [],
         issueNote: status === 'ISSUE' ? (issueNote.trim() || undefined) : undefined,
         issuePhoto: status === 'ISSUE' ? issuePhoto : undefined,
-        reportToAdmin: status === 'ISSUE' ? (reportToAdmin || undefined) : undefined,
+        issuePhotoFile: status === 'ISSUE' ? issuePhotoFile : undefined,
       });
       // Navigate back after successful save
       setTimeout(() => {
@@ -177,14 +237,28 @@ export const CollectionView = () => {
     if (isDraftLocked || isSaving) return;
 
     if (status !== 'ISSUE') {
-      setIssueFlags([]);
-      setIssueNote('');
-      setIssuePhoto(undefined);
-      setReportToAdmin(false);
+      if (issueFlags.length > 0) setIssueFlags([]);
+      if (issueNote) setIssueNote('');
+      if (issuePhoto) setIssuePhoto(undefined);
+      if (issuePhotoFile) setIssuePhotoFile(undefined);
     }
 
     if (status === 'COLLECTED') {
-      setIssueReason('');
+      if (issueReason) setIssueReason('');
+    }
+
+    if (status === 'ISSUE') {
+      const isValid = issueConfig.issueReasons.some(reason => reason.id === issueReason);
+      if (issueReason && !isValid) {
+        setIssueReason('');
+      }
+    }
+
+    if (status === 'DEFERRED') {
+      const isValid = issueConfig.deferredReasons.some(reason => reason.id === issueReason);
+      if (issueReason && !isValid) {
+        setIssueReason('');
+      }
     }
 
     saveCollectionDraft({
@@ -196,7 +270,6 @@ export const CollectionView = () => {
       issueFlags: status === 'ISSUE' ? issueFlags : [],
       issueNote: status === 'ISSUE' ? (issueNote.trim() || undefined) : undefined,
       issuePhoto: status === 'ISSUE' ? issuePhoto : undefined,
-      reportToAdmin: status === 'ISSUE' ? reportToAdmin : undefined,
       updatedAt: new Date().toISOString(),
     });
   }, [
@@ -209,10 +282,11 @@ export const CollectionView = () => {
     issueFlags,
     issueNote,
     issuePhoto,
-    reportToAdmin,
+    issuePhotoFile,
     saveCollectionDraft,
     isDraftLocked,
     isSaving,
+    issueConfig,
   ]);
 
   if (!address) {
@@ -240,6 +314,12 @@ export const CollectionView = () => {
       />
 
       <main className="flex-1 p-4 space-y-4 pb-32 overflow-auto">
+        {address.ownerName && (
+          <div className="bg-card rounded-2xl p-4 border border-border">
+            <p className="text-xs text-muted-foreground">Firma</p>
+            <p className="text-sm font-semibold text-foreground">{address.ownerName}</p>
+          </div>
+        )}
         <div className="bg-card rounded-2xl p-4 border border-border space-y-3">
           <p className="text-sm font-semibold text-foreground">Status odbioru</p>
           <div className="grid gap-2 sm:grid-cols-3">
@@ -295,19 +375,19 @@ export const CollectionView = () => {
               )}
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
-              {Object.entries(ISSUE_REASON_LABELS).map(([key, label]) => (
+              {(status === 'ISSUE' ? issueConfig.issueReasons : issueConfig.deferredReasons).map((reason) => (
                 <button
-                  key={key}
+                  key={reason.id}
                   type="button"
-                  onClick={() => setIssueReason(key as AddressIssueReason)}
+                  onClick={() => setIssueReason(reason.id as AddressIssueReason)}
                   className={cn(
                     'rounded-xl border px-3 py-3 text-left text-sm font-semibold transition-all active:scale-[0.98]',
-                    issueReason === key
+                    issueReason === reason.id
                       ? 'border-destructive/40 bg-destructive/10 text-destructive'
                       : 'border-border text-muted-foreground'
                   )}
                 >
-                  {label}
+                  {reason.label}
                 </button>
               ))}
             </div>
@@ -319,17 +399,17 @@ export const CollectionView = () => {
             <div className="bg-card rounded-2xl p-4 border border-border space-y-3">
               <p className="text-sm font-semibold text-foreground">Problemy na adresie</p>
               <div className="grid gap-2 sm:grid-cols-2">
-                {Object.entries(ISSUE_FLAG_LABELS).map(([key, label]) => {
-                  const isChecked = issueFlags.includes(key as AddressIssueFlag);
+                {issueConfig.issueFlags.map((flag) => {
+                  const isChecked = issueFlags.includes(flag.id as AddressIssueFlag);
                   return (
                     <button
-                      key={key}
+                      key={flag.id}
                       type="button"
                       onClick={() => {
                         setIssueFlags(prev =>
-                          prev.includes(key as AddressIssueFlag)
-                            ? prev.filter(item => item !== key)
-                            : [...prev, key as AddressIssueFlag]
+                          prev.includes(flag.id as AddressIssueFlag)
+                            ? prev.filter(item => item !== flag.id)
+                            : [...prev, flag.id as AddressIssueFlag]
                         );
                       }}
                       className={cn(
@@ -339,7 +419,7 @@ export const CollectionView = () => {
                           : 'border-border text-muted-foreground'
                       )}
                     >
-                      {label}
+                      {flag.label}
                     </button>
                   );
                 })}
@@ -372,7 +452,10 @@ export const CollectionView = () => {
                   />
                   <button
                     type="button"
-                    onClick={() => setIssuePhoto(undefined)}
+                    onClick={() => {
+                      setIssuePhoto(undefined);
+                      setIssuePhotoFile(undefined);
+                    }}
                     className="text-sm text-destructive underline"
                   >
                     Usuń zdjęcie
@@ -390,6 +473,7 @@ export const CollectionView = () => {
                     onChange={(event) => {
                       const file = event.target.files?.[0];
                       if (!file) return;
+                      setIssuePhotoFile(file);
                       const reader = new FileReader();
                       reader.onload = () => setIssuePhoto(reader.result as string);
                       reader.readAsDataURL(file);
@@ -401,21 +485,9 @@ export const CollectionView = () => {
           </div>
         )}
 
-        {status === 'ISSUE' && (
-          <label className="flex items-center gap-2 text-sm text-muted-foreground">
-            <input
-              type="checkbox"
-              checked={reportToAdmin}
-              onChange={(e) => setReportToAdmin(e.target.checked)}
-              className="h-4 w-4 rounded border border-border"
-            />
-            Zgłoś do administracji
-          </label>
-        )}
-
         {status === 'COLLECTED' && (
           <>
-            {visibleWaste.map((category) => (
+            {sortedVisibleWaste.map((category) => (
               <WasteCounter
                 key={category.id}
                 type={category.id}

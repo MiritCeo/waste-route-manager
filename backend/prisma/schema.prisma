@@ -16,6 +16,7 @@ model Address {
   notes              String?  @db.Text
   wasteTypes         Json
   declaredContainers Json?
+  composting         String?
   active             Boolean  @default(true)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
@@ -50,11 +51,14 @@ model RouteAddress {
   issueReason   String?
   issueFlags    Json?
   issueNote     String?
-  issuePhoto    String?
-  reportToAdmin Boolean @default(false)
+  issuePhoto    String? @db.LongText
+  issueReportedAt DateTime?
+  issueReportedById String?
+  issueArchivedAt DateTime?
 
   route   Route   @relation(fields: [routeId], references: [id], onDelete: Cascade)
   address Address @relation(fields: [addressId], references: [id], onDelete: Cascade)
+  issueReportedBy User? @relation("IssueReportedBy", fields: [issueReportedById], references: [id])
 
   @@unique([routeId, addressId])
   @@index([routeId])
@@ -73,4 +77,15 @@ model User {
   active     Boolean  @default(true)
   createdAt  DateTime @default(now())
   lastLogin  DateTime?
+
+  issueReports RouteAddress[] @relation("IssueReportedBy")
+}
+
+model IssueConfig {
+  id              String   @id @default(uuid())
+  issueReasons    Json
+  deferredReasons Json
+  issueFlags      Json
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }

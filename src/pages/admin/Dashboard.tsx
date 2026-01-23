@@ -7,7 +7,8 @@ import {
   Users,
   TrendingUp,
   Activity,
-  Route as RouteIcon
+  Route as RouteIcon,
+  AlertTriangle,
 } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { AdminHeaderRight } from '@/components/AdminHeaderRight';
@@ -19,6 +20,7 @@ export const AdminDashboard = () => {
   const navigate = useNavigate();
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [issuesCount, setIssuesCount] = useState(0);
 
   useEffect(() => {
     loadDashboard();
@@ -28,7 +30,9 @@ export const AdminDashboard = () => {
     try {
       setIsLoading(true);
       const data = await adminService.getDashboardStats();
+      const issues = await adminService.getIssueReports().catch(() => []);
       setStats(data);
+      setIssuesCount(issues.length);
     } catch (error) {
       console.error('Failed to load dashboard:', error);
     } finally {
@@ -71,7 +75,7 @@ export const AdminDashboard = () => {
 
       <main className="p-4 pb-8 space-y-4 max-w-7xl mx-auto">
         {/* Quick stats grid */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
           <div 
             className="bg-card rounded-2xl p-4 border border-border cursor-pointer hover:border-primary/50 transition-colors"
             onClick={() => navigate(ROUTES.ADMIN.ROUTES)}
@@ -122,6 +126,19 @@ export const AdminDashboard = () => {
             </div>
             <p className="text-2xl font-bold text-foreground">{stats.collectedAddresses}</p>
             <p className="text-sm text-muted-foreground">Odebrane</p>
+          </div>
+
+          <div 
+            className="bg-card rounded-2xl p-4 border border-border cursor-pointer hover:border-primary/50 transition-colors"
+            onClick={() => navigate(ROUTES.ADMIN.ISSUES)}
+          >
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-10 h-10 rounded-xl bg-destructive/10 flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 text-destructive" />
+              </div>
+            </div>
+            <p className="text-2xl font-bold text-foreground">{issuesCount}</p>
+            <p className="text-sm text-muted-foreground">Powiadomienia</p>
           </div>
         </div>
 

@@ -11,7 +11,10 @@ interface WasteCounterProps {
   onDecrement: () => void;
 }
 
-const wasteStyles: Record<WasteType, { bg: string; text: string; border: string }> = {
+const wasteStyles: Record<
+  'bio-green' | 'bio-kitchen' | 'glass-clear' | 'glass-colored' | 'paper' | 'plastic' | 'ash' | 'mixed',
+  { bg: string; text: string; border: string }
+> = {
   'bio-green': {
     bg: 'bg-waste-bio-green-bg',
     text: 'text-waste-bio-green',
@@ -54,6 +57,9 @@ const wasteStyles: Record<WasteType, { bg: string; text: string; border: string 
   },
 };
 
+const resolveBaseType = (type: WasteType) =>
+  type.replace(/-(240|1100)$/, '') as keyof typeof wasteStyles;
+
 export const WasteCounter = ({
   type,
   name,
@@ -62,7 +68,7 @@ export const WasteCounter = ({
   onIncrement,
   onDecrement,
 }: WasteCounterProps) => {
-  const styles = wasteStyles[type];
+  const styles = wasteStyles[resolveBaseType(type)] ?? wasteStyles.mixed;
 
   return (
     <div

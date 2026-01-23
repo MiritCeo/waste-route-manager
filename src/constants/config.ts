@@ -8,7 +8,7 @@ export const APP_CONFIG = {
     BASE_URL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api',
     TIMEOUT: 30000,
     RETRY_ATTEMPTS: 3,
-    USE_MOCK_DATA: import.meta.env.VITE_USE_MOCK_DATA !== 'false',
+    USE_MOCK_DATA: false,
   },
 
   // Auth Configuration

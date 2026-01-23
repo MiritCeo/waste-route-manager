@@ -14,10 +14,11 @@ class ApiClient {
     return localStorage.getItem(APP_CONFIG.AUTH.TOKEN_KEY);
   }
 
-  private getHeaders(): HeadersInit {
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
-    };
+  private getHeaders(contentType: 'json' | 'form' = 'json'): HeadersInit {
+    const headers: HeadersInit = {};
+    if (contentType === 'json') {
+      headers['Content-Type'] = 'application/json';
+    }
 
     const token = this.getAuthToken();
     if (token) {
@@ -162,6 +163,24 @@ class ApiClient {
         method: 'PATCH',
         headers: this.getHeaders(),
         body: data ? JSON.stringify(data) : undefined,
+        signal: controller.signal,
+      });
+
+      return await this.handleResponse<T>(response);
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  async putFormData<T>(endpoint: string, data: FormData): Promise<T> {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), this.timeout);
+
+    try {
+      const response = await fetch(`${this.baseURL}${endpoint}`, {
+        method: 'PUT',
+        headers: this.getHeaders('form'),
+        body: data,
         signal: controller.signal,
       });
 

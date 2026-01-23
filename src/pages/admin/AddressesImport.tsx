@@ -13,6 +13,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import {
   Dialog,
   DialogContent,
   DialogDescription,
@@ -47,6 +54,7 @@ type ParsedAddress = {
   source: 'company' | 'residential';
   occurrences: number;
   owner?: string;
+  compost?: string;
 };
 
 type DuplicateInfo = {
@@ -73,6 +81,7 @@ type InvalidAddressRow = {
   city: string;
   postalCode?: string;
   notes: string;
+  composting?: string;
   wasteTypes: WasteType[];
   declaredContainers: DeclaredContainer[];
 };
@@ -81,10 +90,20 @@ type ImportSummary = {
   totalRows: number;
   uniqueAddresses: number;
   created: number;
-  skippedExisting: number;
+  updated: number;
   duplicates: DuplicateInfo[];
   invalidRows: number;
   invalidEntries: InvalidAddressRow[];
+  compostStats: {
+    yes: number;
+    no: number;
+    other: number;
+    unknown: number;
+  };
+  compostPreview: Array<{
+    label: string;
+    compost: string;
+  }>;
 };
 
 const readFileAsText = async (file: File): Promise<string> => {
@@ -168,6 +187,9 @@ const parseAddressValue = (value: string) => {
 const mapWasteTypes = (container: string): WasteType[] => {
   const normalized = container.toLowerCase();
   const types = new Set<WasteType>();
+  const sizeMatch = normalized.match(/\b(\d{2,4})\s*l\b|\b(\d{2,4})l\b/);
+  const sizeValue = sizeMatch?.[1] || sizeMatch?.[2];
+  const size = sizeValue ? Number(sizeValue) : undefined;
 
   if (normalized.includes('papier')) types.add('paper');
   if (normalized.includes('plastik') || normalized.includes('metal')) types.add('plastic');
@@ -175,9 +197,34 @@ const mapWasteTypes = (container: string): WasteType[] => {
     if (normalized.includes('bezbarw')) types.add('glass-clear');
     else types.add('glass-colored');
   }
-  if (normalized.includes('bio')) types.add('bio-green');
   if (normalized.includes('popiół') || normalized.includes('popiol')) types.add('ash');
-  if (normalized.includes('zmiesz')) types.add('mixed');
+
+  if (normalized.includes('resztkowe') || normalized.includes('zmiesz')) {
+    if (size === 1100) types.add('mixed-1100');
+    else if (size === 240) types.add('mixed-240');
+    else types.add('mixed');
+  }
+
+  if (normalized.includes('bio')) {
+    const base = normalized.includes('kuchen') ? 'bio-kitchen' : 'bio-green';
+    if (size === 1100) types.add(`${base}-1100` as WasteType);
+    else if (size === 240) types.add(`${base}-240` as WasteType);
+    else types.add(base as WasteType);
+  }
+
+  if (normalized.includes('papier')) {
+    if (size === 1100) types.add('paper-1100');
+  }
+
+  if (normalized.includes('plastik') || normalized.includes('metal')) {
+    if (size === 1100) types.add('plastic-1100');
+  }
+
+  if (normalized.includes('szkło') || normalized.includes('szklo')) {
+    if (size === 1100) {
+      types.add(normalized.includes('bezbarw') ? 'glass-clear-1100' : 'glass-colored-1100');
+    }
+  }
 
   return Array.from(types);
 };
@@ -191,6 +238,17 @@ const parseDeclaredCount = (value?: string): number => {
   const normalized = value.replace(',', '.').trim();
   const parsed = Number(normalized);
   return Number.isNaN(parsed) ? 0 : parsed;
+};
+
+const normalizeCompostValue = (value?: string): string => {
+  if (!value) return '';
+  const normalized = value.toLowerCase().replace(/\s+/g, ' ').trim();
+  if (!normalized) return '';
+  if (['tak', 't', 'yes', 'y', '1', 'true'].includes(normalized)) return 'Tak';
+  if (['nie', 'n', 'no', '0', 'false'].includes(normalized)) return 'Nie';
+  if (normalized.includes('tak')) return 'Tak';
+  if (normalized.includes('nie')) return 'Nie';
+  return value.trim();
 };
 
 const buildContainerKey = (name: string, frequency?: string) =>
@@ -229,15 +287,6 @@ const buildImportKey = (entry: ParsedAddress) => {
   return `${baseKey}::residential`;
 };
 
-const extractOwnersFromNotes = (notes?: string) => {
-  if (!notes) return [];
-  const line = notes.split('\n').find(item => item.startsWith('Właściciel:'));
-  if (!line) return [];
-  const value = line.replace('Właściciel:', '').trim();
-  if (!value) return [];
-  return value.split(',').map(owner => owner.trim()).filter(Boolean);
-};
-
 const parseDateValue = (value?: string): number => {
   if (!value) return 0;
   const normalized = value.replace(/\./g, '-');
@@ -252,6 +301,7 @@ const addressSchema = z.object({
   city: z.string().min(2, 'Podaj miasto'),
   postalCode: z.string().optional().or(z.literal('')),
   notes: z.string().optional().or(z.literal('')),
+  composting: z.string().optional().or(z.literal('')),
   wasteTypes: z.array(wasteEnum).min(1, 'Wybierz przynajmniej jeden typ odpadu'),
   active: z.boolean(),
 });
@@ -267,6 +317,9 @@ export const AddressesImport = () => {
   const [isManualDialogOpen, setIsManualDialogOpen] = useState(false);
   const [editingInvalid, setEditingInvalid] = useState<InvalidAddressRow | null>(null);
   const [selectedDuplicate, setSelectedDuplicate] = useState<DuplicateInfo | null>(null);
+  const [compostFilter, setCompostFilter] = useState<
+    'all' | 'yes' | 'no' | 'other' | 'unknown'
+  >('all');
   const manualForm = useForm<AddressFormValues>({
     resolver: zodResolver(addressSchema),
     defaultValues: {
@@ -275,6 +328,7 @@ export const AddressesImport = () => {
       city: '',
       postalCode: '',
       notes: '',
+      composting: '',
       wasteTypes: [],
       active: true,
     },
@@ -284,6 +338,18 @@ export const AddressesImport = () => {
     if (!summary?.duplicates?.length) return [];
     return summary.duplicates.slice(0, 20);
   }, [summary]);
+
+  const compostPreview = useMemo(() => {
+    if (!summary?.compostPreview?.length) return [];
+    const entries = summary.compostPreview.filter(entry => {
+      if (compostFilter === 'all') return true;
+      if (compostFilter === 'unknown') return !entry.compost;
+      if (compostFilter === 'yes') return entry.compost === 'Tak';
+      if (compostFilter === 'no') return entry.compost === 'Nie';
+      return entry.compost !== 'Tak' && entry.compost !== 'Nie';
+    });
+    return entries.slice(0, 20);
+  }, [summary, compostFilter]);
 
   const parseCompanyFile = (rows: string[][]) => {
     const groups = new Map<
@@ -450,6 +516,7 @@ export const AddressesImport = () => {
         declarationNumber?: string;
         residents?: string;
         rate?: string;
+        compost?: string;
         latestTimestamp?: number;
       }
     >();
@@ -462,6 +529,7 @@ export const AddressesImport = () => {
       const changeFrom = row[3]?.trim();
       const residents = row[4]?.trim();
       const rate = row[5]?.trim();
+      const compost = normalizeCompostValue(row[6]?.trim());
 
       if (!addressValue) {
         invalidRows += 1;
@@ -481,7 +549,9 @@ export const AddressesImport = () => {
             changeFrom ? `Zmiana od: ${changeFrom}` : '',
             residents ? `Liczba mieszkańców: ${residents}` : '',
             rate ? `Stawka: ${rate}` : '',
+            compost ? `Kompostownik: ${compost}` : '',
           ]),
+          composting: compost || undefined,
           wasteTypes: ['mixed'],
           declaredContainers: [],
         });
@@ -507,7 +577,9 @@ export const AddressesImport = () => {
             changeFrom ? `Zmiana od: ${changeFrom}` : '',
             residents ? `Liczba mieszkańców: ${residents}` : '',
             rate ? `Stawka: ${rate}` : '',
+            compost ? `Kompostownik: ${compost}` : '',
           ]),
+          composting: compost || undefined,
           wasteTypes: ['mixed'],
           declaredContainers: [],
         });
@@ -525,6 +597,7 @@ export const AddressesImport = () => {
           existing.declarationNumber = declarationNumber;
           existing.residents = residents;
           existing.rate = rate;
+          existing.compost = compost;
           existing.latestTimestamp = timestamp;
         }
         return;
@@ -544,6 +617,7 @@ export const AddressesImport = () => {
         declarationNumber,
         residents,
         rate,
+        compost,
         latestTimestamp: timestamp,
       });
     });
@@ -555,6 +629,7 @@ export const AddressesImport = () => {
         entry.changeFrom ? `Zmiana od: ${entry.changeFrom}` : '',
         entry.residents ? `Liczba mieszkańców: ${entry.residents}` : '',
         entry.rate ? `Stawka: ${entry.rate}` : '',
+        entry.compost ? `Kompostownik: ${entry.compost}` : '',
       ]);
 
       return {
@@ -567,6 +642,7 @@ export const AddressesImport = () => {
         declaredContainers: [],
         source: entry.source,
         occurrences: entry.occurrences,
+          compost: entry.compost,
       };
     });
 
@@ -648,6 +724,9 @@ export const AddressesImport = () => {
             current.wasteTypes.push(type);
           }
         });
+        if (entry.compost) {
+          current.compost = entry.compost;
+        }
         current.occurrences += entry.occurrences;
         return;
       }
@@ -689,6 +768,7 @@ export const AddressesImport = () => {
       city: row.city || '',
       postalCode: row.postalCode || '',
       notes: row.notes || '',
+      composting: row.composting || '',
       wasteTypes: row.wasteTypes.length ? row.wasteTypes : ['mixed'],
       active: true,
     });
@@ -704,6 +784,7 @@ export const AddressesImport = () => {
         city: normalizeCityName(values.city),
         postalCode: values.postalCode || undefined,
         notes: values.notes || undefined,
+        composting: values.composting || undefined,
         wasteTypes: values.wasteTypes,
         declaredContainers: editingInvalid.declaredContainers,
         active: values.active,
@@ -762,59 +843,63 @@ export const AddressesImport = () => {
 
       const duplicates = buildDuplicates(allEntries);
       const mergedEntries = mergeEntries(allEntries);
-      const existingAddresses = await adminService.getAddresses();
-      const existingKeys = new Set<string>();
-      existingAddresses.forEach(address => {
-        const baseKey = buildAddressKey({
-          street: address.street,
-          number: address.number,
-          city: address.city,
-          postalCode: address.postalCode,
-        });
-        const owners = extractOwnersFromNotes(address.notes);
-        if (owners.length) {
-          owners.forEach(owner => {
-            existingKeys.add(`${baseKey}::company::${normalizeOwner(owner)}`);
-          });
-        } else {
-          existingKeys.add(`${baseKey}::residential`);
-        }
-      });
-
-      const toCreate = mergedEntries.filter(entry => !existingKeys.has(buildImportKey(entry)));
-      const payloads = toCreate.map(entry => ({
+      const compostPreviewEntries = mergedEntries
+        .filter(entry => entry.source === 'residential')
+        .map(entry => ({
+          label: formatAddressLabel(entry),
+          compost: entry.compost || '',
+        }));
+      const compostStats = compostPreviewEntries.reduce(
+        (acc, entry) => {
+          if (!entry.compost) {
+            acc.unknown += 1;
+          } else if (entry.compost === 'Tak') {
+            acc.yes += 1;
+          } else if (entry.compost === 'Nie') {
+            acc.no += 1;
+          } else {
+            acc.other += 1;
+          }
+          return acc;
+        },
+        { yes: 0, no: 0, other: 0, unknown: 0 }
+      );
+      const payloads = mergedEntries.map(entry => ({
         street: entry.street,
         number: entry.number,
         city: entry.city,
         postalCode: entry.postalCode,
         notes: entry.notes,
+        composting: entry.compost || undefined,
         wasteTypes: entry.wasteTypes.length ? entry.wasteTypes : ['mixed'],
         declaredContainers: entry.declaredContainers,
         active: true,
       }));
 
       let createdTotal = 0;
-      let skippedTotal = 0;
+      let updatedTotal = 0;
       const chunkSize = 500;
 
       for (let i = 0; i < payloads.length; i += chunkSize) {
         const batch = payloads.slice(i, i + chunkSize);
-        const { created, skippedExisting } = await adminService.importAddresses(batch);
+        const { created, updated } = await adminService.importAddresses(batch);
         createdTotal += created;
-        skippedTotal += skippedExisting;
+        updatedTotal += updated;
       }
 
       setSummary({
         totalRows,
         uniqueAddresses: mergedEntries.length,
         created: createdTotal,
-        skippedExisting: skippedTotal + (mergedEntries.length - toCreate.length),
+        updated: updatedTotal,
         duplicates,
         invalidRows,
         invalidEntries,
+        compostStats,
+        compostPreview: compostPreviewEntries,
       });
 
-      toast.success(`Zaimportowano ${createdTotal} adresów`);
+      toast.success(`Dodano ${createdTotal} adresów, zaktualizowano ${updatedTotal}`);
     } catch (error) {
       console.error('Import failed:', error);
       toast.error('Import nie powiódł się');
@@ -900,7 +985,7 @@ export const AddressesImport = () => {
 
         {summary && (
           <div className="space-y-4">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
               <div className="bg-card rounded-2xl p-4 border border-border">
                 <p className="text-sm text-muted-foreground">Wiersze w plikach</p>
                 <p className="text-2xl font-bold text-foreground">{summary.totalRows}</p>
@@ -914,10 +999,14 @@ export const AddressesImport = () => {
                 <p className="text-2xl font-bold text-foreground">{summary.created}</p>
               </div>
               <div className="bg-card rounded-2xl p-4 border border-border">
-                <p className="text-sm text-muted-foreground">Pominięte / błędne</p>
+                <p className="text-sm text-muted-foreground">Zaktualizowane</p>
                 <p className="text-2xl font-bold text-foreground">
-                  {summary.skippedExisting + summary.invalidRows}
+                  {summary.updated}
                 </p>
+              </div>
+              <div className="bg-card rounded-2xl p-4 border border-border">
+                <p className="text-sm text-muted-foreground">Błędne wiersze</p>
+                <p className="text-2xl font-bold text-foreground">{summary.invalidRows}</p>
               </div>
             </div>
 
@@ -976,6 +1065,73 @@ export const AddressesImport = () => {
                 {summary.duplicates.length > duplicatePreview.length && (
                   <p className="text-xs text-muted-foreground">
                     Wyświetlono pierwsze {duplicatePreview.length} pozycji.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {summary.compostPreview.length > 0 && (
+              <div className="bg-card rounded-2xl p-5 border border-border space-y-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="text-sm text-muted-foreground">
+                    Kompostowniki (nieruchomości zamieszkałe)
+                  </div>
+                  <div className="w-full sm:w-64">
+                    <Select value={compostFilter} onValueChange={value => setCompostFilter(value)}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Filtr kompostownika" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">Wszystkie</SelectItem>
+                        <SelectItem value="yes">Kompostownik: Tak</SelectItem>
+                        <SelectItem value="no">Kompostownik: Nie</SelectItem>
+                        <SelectItem value="other">Inne wartości</SelectItem>
+                        <SelectItem value="unknown">Brak danych</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-4">
+                  <div className="rounded-xl border border-border bg-muted/30 p-3">
+                    <p className="text-xs text-muted-foreground">Tak</p>
+                    <p className="text-lg font-semibold text-foreground">{summary.compostStats.yes}</p>
+                  </div>
+                  <div className="rounded-xl border border-border bg-muted/30 p-3">
+                    <p className="text-xs text-muted-foreground">Nie</p>
+                    <p className="text-lg font-semibold text-foreground">{summary.compostStats.no}</p>
+                  </div>
+                  <div className="rounded-xl border border-border bg-muted/30 p-3">
+                    <p className="text-xs text-muted-foreground">Inne</p>
+                    <p className="text-lg font-semibold text-foreground">{summary.compostStats.other}</p>
+                  </div>
+                  <div className="rounded-xl border border-border bg-muted/30 p-3">
+                    <p className="text-xs text-muted-foreground">Brak danych</p>
+                    <p className="text-lg font-semibold text-foreground">
+                      {summary.compostStats.unknown}
+                    </p>
+                  </div>
+                </div>
+
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Adres</TableHead>
+                      <TableHead>Kompostownik</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {compostPreview.map((entry, index) => (
+                      <TableRow key={`${entry.label}-${entry.compost || 'unknown'}-${index}`}>
+                        <TableCell>{entry.label}</TableCell>
+                        <TableCell>{entry.compost || 'Brak danych'}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                {summary.compostPreview.length > compostPreview.length && (
+                  <p className="text-xs text-muted-foreground">
+                    Wyświetlono pierwsze {compostPreview.length} pozycji.
                   </p>
                 )}
               </div>
@@ -1114,6 +1270,34 @@ export const AddressesImport = () => {
                     <FormLabel>Notatki</FormLabel>
                     <FormControl>
                       <Textarea {...field} rows={3} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={manualForm.control}
+                name="composting"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Kompostownik</FormLabel>
+                    <FormControl>
+                      <Select
+                        value={field.value ? field.value : 'unknown'}
+                        onValueChange={(value) =>
+                          field.onChange(value === 'unknown' ? '' : value)
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Wybierz wartość" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="unknown">Brak danych</SelectItem>
+                          <SelectItem value="Tak">Tak</SelectItem>
+                          <SelectItem value="Nie">Nie</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </FormControl>
                     <FormMessage />
                   </FormItem>

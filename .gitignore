@@ -32,3 +32,9 @@ backend/prisma/dev.db*
 *.njsproj
 *.sln
 *.sw?
+
+# Local data files
+*.csv
+
+# Workspace files
+*.code-workspace
