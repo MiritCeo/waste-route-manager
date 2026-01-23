@@ -487,6 +487,11 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
     const totalAddresses = publishedRoutes.reduce((sum, r) => sum + r.totalAddresses, 0);
     const collectedAddresses = publishedRoutes.reduce((sum, r) => sum + r.collectedAddresses, 0);
 
+    const addressRows = await prisma.address.findMany({ select: { notes: true } });
+    const addressBookTotal = addressRows.length;
+    const companyAddresses = addressRows.filter(row => extractOwnerFromNotes(row.notes)).length;
+    const residentialAddresses = addressBookTotal - companyAddresses;
+
     const totalEmployees = await prisma.user.count();
     const activeEmployees = await prisma.user.count({ where: { active: true } });
 
@@ -499,6 +504,9 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
       pendingAddresses: totalAddresses - collectedAddresses,
       totalEmployees,
       activeEmployees,
+      addressBookTotal,
+      companyAddresses,
+      residentialAddresses,
       wasteCollected: [],
       recentActivity: [],
     };

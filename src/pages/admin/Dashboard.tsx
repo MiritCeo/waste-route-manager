@@ -98,8 +98,11 @@ export const AdminDashboard = () => {
                 <MapPin className="w-5 h-5 text-primary" />
               </div>
             </div>
-            <p className="text-2xl font-bold text-foreground">{stats.totalAddresses}</p>
+            <p className="text-2xl font-bold text-foreground">{stats.addressBookTotal}</p>
             <p className="text-sm text-muted-foreground">Adresy</p>
+            <p className="text-xs text-muted-foreground">
+              Firmy: {stats.companyAddresses} · Zamieszkałe: {stats.residentialAddresses}
+            </p>
           </div>
 
           <div 

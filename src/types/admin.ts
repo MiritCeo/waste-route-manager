@@ -10,6 +10,9 @@ export interface DashboardStats {
   pendingAddresses: number;
   totalEmployees: number;
   activeEmployees: number;
+  addressBookTotal: number;
+  companyAddresses: number;
+  residentialAddresses: number;
   wasteCollected: WasteCollectionStats[];
   recentActivity: ActivityLog[];
 }
