@@ -234,15 +234,26 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const makeDraftKey = (routeId: string, addressId: string) => `${routeId}:${addressId}`;
 
-  const hasCollectionDraft = (routeId: string, addressId: string): boolean => {
-    const drafts = getDraftsMap();
-    return Boolean(drafts[makeDraftKey(routeId, addressId)]);
+  const isDraftCurrent = (draft: CollectionDraft) => {
+    const today = new Date().toISOString().split('T')[0];
+    return (draft.updatedAt || '').startsWith(today);
   };
 
   const getCollectionDraft = (routeId: string, addressId: string): CollectionDraft | null => {
     const drafts = getDraftsMap();
-    return drafts[makeDraftKey(routeId, addressId)] || null;
+    const key = makeDraftKey(routeId, addressId);
+    const draft = drafts[key];
+    if (!draft) return null;
+    if (!isDraftCurrent(draft)) {
+      delete drafts[key];
+      saveDraftsMap(drafts);
+      return null;
+    }
+    return draft;
   };
+
+  const hasCollectionDraft = (routeId: string, addressId: string): boolean =>
+    Boolean(getCollectionDraft(routeId, addressId));
 
   const saveCollectionDraft = (draft: CollectionDraft) => {
     const drafts = getDraftsMap();
