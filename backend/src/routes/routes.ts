@@ -1,9 +1,14 @@
 import { FastifyInstance } from 'fastify';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../db.js';
 import { buildWasteCategories, WasteType } from '../utils/waste.js';
 import { DEFAULT_ISSUE_CONFIG } from '../utils/issueConfig.js';
 
 export const registerDriverRoutes = (app: FastifyInstance) => {
+  type RouteWithAddresses = Prisma.RouteGetPayload<{
+    include: { routeAddresses: { include: { address: true } } };
+  }>;
+
   const parseJsonValue = (value?: string) => {
     if (!value) return undefined;
     try {
@@ -98,7 +103,7 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
     return baseWaste.map((item: any) => ({ ...item, count: 0 }));
   };
 
-  const resetRouteIfNeeded = async (route: any) => {
+  const resetRouteIfNeeded = async (route: RouteWithAddresses): Promise<RouteWithAddresses> => {
     if (!route.date || route.date >= startOfToday) {
       return route;
     }
@@ -119,7 +124,7 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
             status: 'PENDING',
             waste: resetWasteByAddress.get(item.id) || [],
             issueReason: null,
-            issueFlags: null,
+            issueFlags: Prisma.JsonNull,
             issueNote: null,
             issuePhoto: null,
             issueReportedAt: null,
@@ -138,7 +143,7 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
       ...route,
       date: startOfToday,
       collectedAddresses: 0,
-      routeAddresses: route.routeAddresses.map((item: any) => ({
+      routeAddresses: route.routeAddresses.map((item: RouteWithAddresses['routeAddresses'][number]) => ({
         ...item,
         isCollected: false,
         status: 'PENDING',
@@ -167,14 +172,14 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
 
     const normalizedRoutes = await Promise.all(routes.map(resetRouteIfNeeded));
 
-    return normalizedRoutes.map(route => ({
+    return normalizedRoutes.map((route: RouteWithAddresses) => ({
       id: route.id,
       name: route.name,
       date: route.date?.toISOString().split('T')[0],
       updatedAt: route.updatedAt.toISOString(),
       totalAddresses: route.totalAddresses,
       collectedAddresses: route.collectedAddresses,
-      addresses: route.routeAddresses.map(item => ({
+      addresses: route.routeAddresses.map((item: RouteWithAddresses['routeAddresses'][number]) => ({
         id: item.address.id,
         street: item.address.street,
         number: item.address.number,
@@ -229,7 +234,7 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
       return reply.status(404).send({ message: 'Nie znaleziono trasy' });
     }
 
-    route = await resetRouteIfNeeded(route);
+    route = await resetRouteIfNeeded(route as RouteWithAddresses);
 
     return {
       id: route.id,
@@ -238,7 +243,7 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
       updatedAt: route.updatedAt.toISOString(),
       totalAddresses: route.totalAddresses,
       collectedAddresses: route.collectedAddresses,
-      addresses: route.routeAddresses.map(item => ({
+      addresses: route.routeAddresses.map((item: RouteWithAddresses['routeAddresses'][number]) => ({
         id: item.address.id,
         street: item.address.street,
         number: item.address.number,
