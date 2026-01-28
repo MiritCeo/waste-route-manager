@@ -234,10 +234,23 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const makeDraftKey = (routeId: string, addressId: string) => `${routeId}:${addressId}`;
 
-  const isDraftCurrent = (draft: CollectionDraft) => {
-    const today = new Date().toISOString().split('T')[0];
-    return (draft.updatedAt || '').startsWith(today);
+  const getLocalDateString = (value?: Date) => {
+    const date = value ?? new Date();
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   };
+
+  const getDraftDate = (updatedAt?: string) => {
+    if (!updatedAt) return '';
+    const parsed = new Date(updatedAt);
+    if (Number.isNaN(parsed.getTime())) return '';
+    return getLocalDateString(parsed);
+  };
+
+  const isDraftCurrent = (draft: CollectionDraft) =>
+    getDraftDate(draft.updatedAt) === getLocalDateString();
 
   const getCollectionDraft = (routeId: string, addressId: string): CollectionDraft | null => {
     const drafts = getDraftsMap();
