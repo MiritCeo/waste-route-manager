@@ -86,6 +86,74 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
     return line.replace('Właściciel:', '').trim() || undefined;
   };
 
+  const startOfToday = (() => {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    return now;
+  })();
+
+  const resetWasteList = (address: any, storedWaste: any) => {
+    const baseWaste = buildWasteList(address, storedWaste);
+    if (!Array.isArray(baseWaste)) return [];
+    return baseWaste.map((item: any) => ({ ...item, count: 0 }));
+  };
+
+  const resetRouteIfNeeded = async (route: any) => {
+    if (!route.date || route.date >= startOfToday) {
+      return route;
+    }
+
+    const resetWasteByAddress = new Map(
+      route.routeAddresses.map((item: any) => [
+        item.id,
+        resetWasteList(item.address, item.waste),
+      ])
+    );
+
+    await prisma.$transaction([
+      ...route.routeAddresses.map((item: any) =>
+        prisma.routeAddress.update({
+          where: { id: item.id },
+          data: {
+            isCollected: false,
+            status: 'PENDING',
+            waste: resetWasteByAddress.get(item.id) || [],
+            issueReason: null,
+            issueFlags: null,
+            issueNote: null,
+            issuePhoto: null,
+            issueReportedAt: null,
+            issueReportedById: null,
+            issueArchivedAt: null,
+          },
+        })
+      ),
+      prisma.route.update({
+        where: { id: route.id },
+        data: { collectedAddresses: 0, date: startOfToday },
+      }),
+    ]);
+
+    return {
+      ...route,
+      date: startOfToday,
+      collectedAddresses: 0,
+      routeAddresses: route.routeAddresses.map((item: any) => ({
+        ...item,
+        isCollected: false,
+        status: 'PENDING',
+        waste: resetWasteByAddress.get(item.id) || [],
+        issueReason: null,
+        issueFlags: null,
+        issueNote: null,
+        issuePhoto: null,
+        issueReportedAt: null,
+        issueReportedById: null,
+        issueArchivedAt: null,
+      })),
+    };
+  };
+
   app.get('/routes', { preHandler: [app.authenticate] }, async () => {
     const routes = await prisma.route.findMany({
       where: { publicationStatus: 'PUBLISHED' },
@@ -97,7 +165,9 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
       },
     });
 
-    return routes.map(route => ({
+    const normalizedRoutes = await Promise.all(routes.map(resetRouteIfNeeded));
+
+    return normalizedRoutes.map(route => ({
       id: route.id,
       name: route.name,
       date: route.date?.toISOString().split('T')[0],
@@ -146,7 +216,7 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
 
   app.get('/routes/:id', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { id } = request.params as { id: string };
-    const route = await prisma.route.findFirst({
+    let route = await prisma.route.findFirst({
       where: { id, publicationStatus: 'PUBLISHED' },
       include: {
         routeAddresses: {
@@ -158,6 +228,8 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
     if (!route) {
       return reply.status(404).send({ message: 'Nie znaleziono trasy' });
     }
+
+    route = await resetRouteIfNeeded(route);
 
     return {
       id: route.id,

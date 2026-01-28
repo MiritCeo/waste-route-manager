@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Plus, Edit, Trash2, MapPin, Filter, Search, ArrowUpDown, UploadCloud } from 'lucide-react';
+import { Plus, Edit, Trash2, MapPin, Filter, Search, ArrowUpDown, UploadCloud, RotateCcw } from 'lucide-react';
 import { adminService } from '@/api/services/admin.service';
 import { AdminRoute } from '@/types/admin';
 import { APP_CONFIG } from '@/constants/config';
@@ -124,6 +124,22 @@ export const RoutesManagement = () => {
     } catch (error: any) {
       console.error('Route publish failed:', error);
       toast.error(error?.message || 'Nie udało się opublikować trasy');
+    }
+  };
+
+  const handleReset = async (route: AdminRoute) => {
+    const confirmed = window.confirm(
+      `Czy na pewno zresetować trasę "${route.name}"? Spowoduje to wyzerowanie odbiorów.`
+    );
+    if (!confirmed) return;
+
+    try {
+      await adminService.resetRoute(route.id);
+      toast.success('Trasa została zresetowana');
+      await loadRoutes();
+    } catch (error: any) {
+      console.error('Route reset failed:', error);
+      toast.error(error?.message || 'Nie udało się zresetować trasy');
     }
   };
 
@@ -264,6 +280,15 @@ export const RoutesManagement = () => {
                       Opublikuj
                     </Button>
                   )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
+                    onClick={() => handleReset(route)}
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    Resetuj
+                  </Button>
                   <Button variant="outline" size="sm" className="gap-2" onClick={() => handleEditRoute(route.id)}>
                     <Edit className="w-4 h-4" />
                     Edytuj

@@ -1,6 +1,7 @@
 import { FastifyInstance } from 'fastify';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../db.js';
+import { Prisma } from '@prisma/client';
 import { buildWasteCategories, WASTE_OPTIONS } from '../utils/waste.js';
 import { DEFAULT_ISSUE_CONFIG } from '../utils/issueConfig.js';
 
@@ -472,6 +473,72 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
       totalAddresses: route.totalAddresses,
       collectedAddresses: route.collectedAddresses,
       addressIds: [],
+      assignedDriverId: route.assignedDriverId || undefined,
+      publicationStatus: route.publicationStatus as 'DRAFT' | 'PUBLISHED',
+      addresses: [],
+    };
+  });
+
+  app.post('/admin/routes/:id/reset', async (request, reply) => {
+    const { id } = request.params as { id: string };
+
+    const route = await prisma.route.findUnique({
+      where: { id },
+      include: {
+        routeAddresses: {
+          include: { address: true },
+          orderBy: { position: 'asc' },
+        },
+      },
+    });
+
+    if (!route) {
+      return reply.status(404).send({ message: 'Nie znaleziono trasy' });
+    }
+
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
+
+    const resetWaste = (address: any, storedWaste: any) => {
+      const baseWaste = buildWasteCategories(address?.wasteTypes as any);
+      const source = Array.isArray(storedWaste) && storedWaste.length > 0 ? storedWaste : baseWaste;
+      return source.map((item: any) => ({ ...item, count: 0 }));
+    };
+
+    const resetData = {
+      isCollected: false,
+      status: 'PENDING',
+      waste: undefined as any,
+      issueReason: null,
+      issueFlags: Prisma.JsonNull,
+      issueNote: null,
+      issuePhoto: null,
+      issueReportedAt: null,
+      issueReportedById: null,
+      issueArchivedAt: null,
+    } as Prisma.RouteAddressUpdateInput;
+
+    await prisma.$transaction([
+      ...route.routeAddresses.map(item =>
+        prisma.routeAddress.update({
+          where: { id: item.id },
+          data: { ...resetData, waste: resetWaste(item.address, item.waste) },
+        })
+      ),
+      prisma.route.update({
+        where: { id: route.id },
+        data: { collectedAddresses: 0, date: startOfToday },
+      }),
+    ]);
+
+    return {
+      id: route.id,
+      name: route.name,
+      date: startOfToday.toISOString().split('T')[0],
+      updatedAt: route.updatedAt.toISOString(),
+      totalAddresses: route.totalAddresses,
+      collectedAddresses: 0,
+      addressIds: route.routeAddresses.map(item => item.addressId),
       assignedDriverId: route.assignedDriverId || undefined,
       publicationStatus: route.publicationStatus as 'DRAFT' | 'PUBLISHED',
       addresses: [],

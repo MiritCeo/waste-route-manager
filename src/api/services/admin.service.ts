@@ -101,6 +101,10 @@ class AdminService {
     return apiClient.post<AdminRoute>(`/admin/routes/${id}/publish`, {});
   }
 
+  async resetRoute(id: string): Promise<AdminRoute> {
+    return apiClient.post<AdminRoute>(`/admin/routes/${id}/reset`, {});
+  }
+
   async archiveIssue(routeId: string, addressId: string): Promise<{ issueArchivedAt?: string }> {
     return apiClient.patch<{ issueArchivedAt?: string }>(
       `/admin/issues/${routeId}/${addressId}/archive`,
