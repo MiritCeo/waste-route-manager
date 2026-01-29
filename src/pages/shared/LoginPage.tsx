@@ -126,10 +126,7 @@ export const LoginPage = () => {
             </Button>
           </form>
 
-          {/* Demo hint */}
-          <div className="text-center text-sm text-muted-foreground">
-            <p>Demo: 001 / 1234 (kierowca), 002 / 1234 (admin)</p>
-          </div>
+          
         </div>
       </div>
 

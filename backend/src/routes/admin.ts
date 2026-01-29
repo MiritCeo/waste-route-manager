@@ -804,6 +804,16 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
 
   app.delete('/admin/employees/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      return reply.status(404).send({ message: 'Nie znaleziono użytkownika' });
+    }
+    if (user.role === 'ADMIN') {
+      const adminsCount = await prisma.user.count({ where: { role: 'ADMIN' } });
+      if (adminsCount <= 1) {
+        return reply.status(400).send({ message: 'Nie można usunąć ostatniego administratora' });
+      }
+    }
     await prisma.user.delete({ where: { id } });
     return reply.send({ success: true });
   });

@@ -133,6 +133,7 @@ export const EmployeesManagement = () => {
   const totalPages = Math.max(1, Math.ceil(sortedEmployees.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const paginatedEmployees = sortedEmployees.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  const adminCount = employees.filter(employee => employee.role === 'ADMIN').length;
 
   const getRoleBadgeColor = (role: UserType['role']) => {
     const colors = {
@@ -353,6 +354,11 @@ export const EmployeesManagement = () => {
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${getRoleBadgeColor(employee.role)}`}>
                         {ROLE_LABELS[employee.role]}
                       </span>
+                      {employee.role === 'ADMIN' && adminCount <= 1 && (
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium border bg-warning/10 text-warning border-warning/20">
+                          Ostatni admin
+                        </span>
+                      )}
                       {!employee.active && (
                         <span className="px-2 py-0.5 rounded-full text-xs font-medium border bg-destructive/10 text-destructive border-destructive/20">
                           Nieaktywny
@@ -385,6 +391,10 @@ export const EmployeesManagement = () => {
                     size="sm"
                     className="gap-2 text-destructive hover:text-destructive"
                     onClick={() => handleDelete(employee)}
+                    disabled={employee.role === 'ADMIN' && adminCount <= 1}
+                    title={employee.role === 'ADMIN' && adminCount <= 1
+                      ? 'Nie można usunąć ostatniego administratora'
+                      : 'Usuń pracownika'}
                   >
                     <Trash2 className="w-4 h-4" />
                   </Button>
