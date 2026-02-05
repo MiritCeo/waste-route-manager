@@ -45,6 +45,7 @@ const buildImportKey = (data: {
 };
 
 export const registerAdminRoutes = (app: FastifyInstance) => {
+  type CollectionLogRow = Prisma.CollectionLogGetPayload<{}>;
 
   app.get('/admin/addresses', async (request) => {
     const query = request.query as {
@@ -156,7 +157,7 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
     const dailyAddressMap = new Map<string, Set<string>>();
     const monthlyAddressMap = new Map<string, Set<string>>();
 
-    logs.forEach(item => {
+    logs.forEach((item: CollectionLogRow) => {
       const collectedAt = item.collectedAt;
       const dateKey = collectedAt.toISOString().split('T')[0];
       const monthKey = dateKey.slice(0, 7);
@@ -255,7 +256,7 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
 
     const collected = await prisma.collectionLog.findMany();
 
-    collected.forEach(item => {
+    collected.forEach((item: CollectionLogRow) => {
       const entry = summaryMap.get(item.addressId);
       if (!entry) return;
       const wasteList = Array.isArray(item.waste) ? item.waste : [];
@@ -848,7 +849,7 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
 
     const byDate: Record<string, any> = {};
     const addressSets: Record<string, Set<string>> = {};
-    logs.forEach(item => {
+    logs.forEach((item: CollectionLogRow) => {
       const date = item.collectedAt.toISOString().split('T')[0];
       if (!byDate[date]) {
         byDate[date] = {
