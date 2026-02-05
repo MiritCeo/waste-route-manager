@@ -190,14 +190,6 @@ export const CollectionView = () => {
         toast.error('Wybierz powód problemu');
         return;
       }
-      if (!issueNote.trim()) {
-        toast.error('Dodaj obowiązkową notatkę');
-        return;
-      }
-      if (!issuePhoto) {
-        toast.error('Dodaj zdjęcie z miejsca zdarzenia');
-        return;
-      }
     }
 
     if (status === 'DEFERRED' && !issueReason) {
@@ -369,7 +361,7 @@ export const CollectionView = () => {
                 {status === 'ISSUE' ? 'Powód problemu' : 'Powód odłożenia'}
               </p>
               {status === 'ISSUE' ? (
-                <p className="text-xs text-muted-foreground">Wymagane: powód, notatka i zdjęcie.</p>
+                <p className="text-xs text-muted-foreground">Wymagane: wybór powodu.</p>
               ) : (
                 <p className="text-xs text-muted-foreground">Wymagane: wybór powodu.</p>
               )}
@@ -427,7 +419,7 @@ export const CollectionView = () => {
             </div>
 
             <div className="bg-card rounded-2xl p-4 border border-border space-y-3">
-              <p className="text-sm font-semibold text-foreground">Notatka (wymagana)</p>
+              <p className="text-sm font-semibold text-foreground">Notatka (opcjonalna)</p>
               <textarea
                 value={issueNote}
                 onChange={(e) => setIssueNote(e.target.value)}
@@ -441,7 +433,7 @@ export const CollectionView = () => {
 
         {status === 'ISSUE' && (
           <div className="bg-card rounded-2xl p-4 border border-border space-y-3">
-            <p className="text-sm font-semibold text-foreground">Zdjęcie (wymagane)</p>
+            <p className="text-sm font-semibold text-foreground">Zdjęcie (opcjonalne)</p>
             <div className="flex flex-col gap-3">
               {issuePhoto ? (
                 <div className="space-y-2">

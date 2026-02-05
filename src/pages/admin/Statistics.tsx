@@ -127,9 +127,14 @@ export const Statistics = () => {
               <p className="text-sm text-muted-foreground">Dzienna analiza ilości odpadów</p>
             </div>
           </div>
-          <Button onClick={() => navigate(ROUTES.ADMIN.DAILY_STATS)}>
-            Statystyki dzienne
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => navigate(ROUTES.ADMIN.DAILY_STATS)}>
+              Statystyki dzienne
+            </Button>
+            <Button variant="outline" onClick={() => navigate(ROUTES.ADMIN.ADDRESS_STATS_OVERVIEW)}>
+              Statystyka ogólna adresów
+            </Button>
+          </div>
         </div>
       </main>
     </div>

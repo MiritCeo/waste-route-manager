@@ -32,7 +32,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { Plus, Search, MapPin, Edit, Trash2, Filter, ArrowUpDown, Upload } from 'lucide-react';
+import { Plus, Search, MapPin, Edit, Trash2, Filter, ArrowUpDown, Upload, Download, BarChart3 } from 'lucide-react';
 import { adminService } from '@/api/services/admin.service';
 import { AdminAddress } from '@/types/admin';
 import { WASTE_OPTIONS } from '@/constants/waste';
@@ -41,7 +41,7 @@ import { APP_CONFIG } from '@/constants/config';
 import { toast } from 'sonner';
 import { applyApiFieldErrors } from '@/utils/formErrors';
 import { normalizeCityName } from '@/utils/addressKeys';
-import { ROUTES } from '@/constants/routes';
+import { ROUTES, getAdminAddressStatsPath } from '@/constants/routes';
 
 const wasteEnum = z.enum(WASTE_OPTIONS.map(option => option.id) as [WasteType, ...WasteType[]]);
 const addressSchema = z.object({
@@ -63,6 +63,9 @@ export const AddressesManagement = () => {
   const [cityFilter, setCityFilter] = useState('ALL');
   const [wasteFilter, setWasteFilter] = useState<'ALL' | WasteType>('ALL');
   const [statusFilter, setStatusFilter] = useState<'ALL' | 'ACTIVE' | 'INACTIVE'>('ALL');
+  const [compostFilter, setCompostFilter] = useState<'ALL' | 'YES' | 'NO' | 'UNKNOWN'>('ALL');
+  const [assignmentFilter, setAssignmentFilter] = useState<'ALL' | 'UNASSIGNED'>('ALL');
+  const [typeFilter, setTypeFilter] = useState<'ALL' | 'COMPANY' | 'RESIDENTIAL'>('ALL');
   const [sortBy, setSortBy] = useState<'street' | 'city' | 'createdAt'>('street');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(1);
@@ -94,11 +97,11 @@ export const AddressesManagement = () => {
 
   useEffect(() => {
     loadAddresses();
-  }, [searchQuery, cityFilter, wasteFilter, statusFilter, sortBy, sortOrder]);
+  }, [searchQuery, cityFilter, wasteFilter, statusFilter, compostFilter, assignmentFilter, typeFilter, sortBy, sortOrder]);
 
   useEffect(() => {
     setPage(1);
-  }, [searchQuery, cityFilter, wasteFilter, statusFilter, sortBy, sortOrder, pageSize]);
+  }, [searchQuery, cityFilter, wasteFilter, statusFilter, compostFilter, assignmentFilter, typeFilter, sortBy, sortOrder, pageSize]);
 
   const loadAddresses = async () => {
     try {
@@ -108,6 +111,15 @@ export const AddressesManagement = () => {
         city: cityFilter === 'ALL' ? undefined : cityFilter,
         wasteType: wasteFilter === 'ALL' ? undefined : wasteFilter,
         active: statusFilter === 'ALL' ? undefined : statusFilter === 'ACTIVE',
+        composting:
+          compostFilter === 'ALL'
+            ? undefined
+            : compostFilter === 'YES'
+              ? 'yes'
+              : compostFilter === 'NO'
+                ? 'no'
+                : 'unknown',
+        unassigned: assignmentFilter === 'UNASSIGNED' ? true : undefined,
         sortBy,
         sortOrder,
       });
@@ -128,7 +140,11 @@ export const AddressesManagement = () => {
   const visibleWasteOptions = useMemo(() => WASTE_OPTIONS, []);
 
   const sortedAddresses = useMemo(() => {
-    const list = [...addresses];
+    const list = [...addresses].filter(address => {
+      if (typeFilter === 'ALL') return true;
+      const isCompany = Boolean(address.notes?.includes('Typ: Firma') || address.notes?.includes('Właściciel:'));
+      return typeFilter === 'COMPANY' ? isCompany : !isCompany;
+    });
     list.sort((a, b) => {
       const aValue = a[sortBy];
       const bValue = b[sortBy];
@@ -145,11 +161,145 @@ export const AddressesManagement = () => {
       return String(aValue).localeCompare(String(bValue)) * direction;
     });
     return list;
-  }, [addresses, sortBy, sortOrder]);
+  }, [addresses, sortBy, sortOrder, typeFilter]);
 
   const totalPages = Math.max(1, Math.ceil(sortedAddresses.length / pageSize));
   const currentPage = Math.min(page, totalPages);
   const paginatedAddresses = sortedAddresses.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  const isCompanyAddress = (address: AdminAddress) =>
+    Boolean(address.notes?.includes('Typ: Firma') || address.notes?.includes('Właściciel:'));
+
+  const getNoteValue = (notes: string | undefined, prefix: string) => {
+    if (!notes) return '';
+    const line = notes.split('\n').find(item => item.trim().startsWith(prefix));
+    if (!line) return '';
+    return line.replace(prefix, '').trim();
+  };
+
+  const formatAddressLabel = (address: AdminAddress) => {
+    const postalPart = address.postalCode ? `${address.postalCode} ` : '';
+    return `${postalPart}${address.city}, ${address.street} ${address.number}`.trim();
+  };
+
+  const escapeCsvValue = (value: string | number | undefined | null) => {
+    const stringValue = value === undefined || value === null ? '' : String(value);
+    if (/[;"\n\r]/.test(stringValue)) {
+      return `"${stringValue.replace(/"/g, '""')}"`;
+    }
+    return stringValue;
+  };
+
+  const buildCsv = (rows: string[][]) => {
+    const content = rows.map(row => row.map(escapeCsvValue).join(';')).join('\n');
+    return `\ufeff${content}`;
+  };
+
+  const downloadCsv = (filename: string, content: string) => {
+    const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleExportCsv = (mode: 'all' | 'company' | 'residential' = 'all') => {
+    const companies = sortedAddresses.filter(isCompanyAddress);
+    const residential = sortedAddresses.filter(address => !isCompanyAddress(address));
+    const exportCompanies = mode === 'all' || mode === 'company';
+    const exportResidential = mode === 'all' || mode === 'residential';
+    const dateStamp = new Date().toISOString().split('T')[0];
+
+    if ((exportCompanies && companies.length === 0) || (exportResidential && residential.length === 0)) {
+      toast.error('Brak adresów do eksportu');
+      return;
+    }
+
+    if (exportCompanies && companies.length > 0) {
+      const rows: string[][] = [
+        ['Lp.', 'Właściciel', 'Adres', 'Pojemnik', 'Liczba', 'Częstotliwość'],
+      ];
+      let index = 1;
+      companies.forEach(address => {
+        const owner = getNoteValue(address.notes, 'Właściciel:');
+        const label = formatAddressLabel(address);
+        const containers = address.declaredContainers || [];
+        if (containers.length === 0) {
+          rows.push([String(index), owner, label, '', '', '']);
+          index += 1;
+          return;
+        }
+        containers.forEach(container => {
+          rows.push([
+            String(index),
+            owner,
+            label,
+            container.name,
+            String(container.count ?? ''),
+            container.frequency || '',
+          ]);
+          index += 1;
+        });
+      });
+      downloadCsv(`adresy_firmy_${dateStamp}.csv`, buildCsv(rows));
+    }
+
+    if (exportResidential && residential.length > 0) {
+      const rows: string[][] = [
+        ['Lp.', 'Nieruchomość', 'Numer', 'Zmiana od', 'Liczba mieszkańców', 'Stawka', 'Kompostownik'],
+      ];
+      let index = 1;
+      residential.forEach(address => {
+        const label = formatAddressLabel(address);
+        const declarationNumber = getNoteValue(address.notes, 'Numer deklaracji:');
+        const changeFrom = getNoteValue(address.notes, 'Zmiana od:');
+        const residents = getNoteValue(address.notes, 'Liczba mieszkańców:');
+        const rate = getNoteValue(address.notes, 'Stawka:');
+        const compost = address.composting || getNoteValue(address.notes, 'Kompostownik:');
+        rows.push([
+          String(index),
+          label,
+          declarationNumber,
+          changeFrom,
+          residents,
+          rate,
+          compost,
+        ]);
+        index += 1;
+      });
+      downloadCsv(`adresy_mieszkalne_${dateStamp}.csv`, buildCsv(rows));
+    }
+
+    toast.success('Eksport zakończony');
+  };
+
+  const PaginationControls = () => (
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <p className="text-sm text-muted-foreground">
+        Strona {currentPage} z {totalPages}
+      </p>
+      <div className="flex gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={currentPage <= 1}
+          onClick={() => setPage(prev => Math.max(1, prev - 1))}
+        >
+          Poprzednia
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={currentPage >= totalPages}
+          onClick={() => setPage(prev => Math.min(totalPages, prev + 1))}
+        >
+          Następna
+        </Button>
+      </div>
+    </div>
+  );
 
   const handleOpenCreate = () => {
     setEditingAddress(null);
@@ -243,7 +393,7 @@ export const AddressesManagement = () => {
       <Header 
         title="Zarządzanie adresami" 
         subtitle={`${addresses.length} adresów`}
-        onBack={() => navigate(-1)}
+        onBack={() => navigate(ROUTES.ADMIN.DASHBOARD)}
         rightElement={<AdminHeaderRight />}
       />
 
@@ -268,6 +418,18 @@ export const AddressesManagement = () => {
             >
               <Upload className="w-4 h-4" />
               Importuj
+            </Button>
+            <Button variant="outline" className="gap-2" onClick={() => handleExportCsv('all')}>
+              <Download className="w-4 h-4" />
+              Eksport CSV (wszystkie)
+            </Button>
+            <Button variant="outline" className="gap-2" onClick={() => handleExportCsv('company')}>
+              <Download className="w-4 h-4" />
+              Eksport tylko firmy
+            </Button>
+            <Button variant="outline" className="gap-2" onClick={() => handleExportCsv('residential')}>
+              <Download className="w-4 h-4" />
+              Eksport tylko mieszkalne
             </Button>
             <Button className="gap-2" onClick={handleOpenCreate}>
               <Plus className="w-4 h-4" />
@@ -317,6 +479,36 @@ export const AddressesManagement = () => {
               <SelectItem value="INACTIVE">Nieaktywne</SelectItem>
             </SelectContent>
           </Select>
+          <Select value={compostFilter} onValueChange={(value) => setCompostFilter(value as typeof compostFilter)}>
+            <SelectTrigger className="w-full md:w-52">
+              <SelectValue placeholder="Kompostownik" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Wszystkie</SelectItem>
+              <SelectItem value="YES">Tak</SelectItem>
+              <SelectItem value="NO">Nie</SelectItem>
+              <SelectItem value="UNKNOWN">Brak danych</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={assignmentFilter} onValueChange={(value) => setAssignmentFilter(value as typeof assignmentFilter)}>
+            <SelectTrigger className="w-full md:w-52">
+              <SelectValue placeholder="Przypisanie" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Wszystkie</SelectItem>
+              <SelectItem value="UNASSIGNED">Nieprzypisane do trasy</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={typeFilter} onValueChange={(value) => setTypeFilter(value as typeof typeFilter)}>
+            <SelectTrigger className="w-full md:w-52">
+              <SelectValue placeholder="Typ adresu" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">Wszystkie</SelectItem>
+              <SelectItem value="COMPANY">Tylko firmy</SelectItem>
+              <SelectItem value="RESIDENTIAL">Tylko mieszkalne</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="flex flex-col md:flex-row gap-3">
@@ -354,6 +546,8 @@ export const AddressesManagement = () => {
             </SelectContent>
           </Select>
         </div>
+
+        <PaginationControls />
 
         {isLoading && (
           <div className="bg-card rounded-2xl p-4 border border-border flex items-center gap-3">
@@ -413,6 +607,15 @@ export const AddressesManagement = () => {
                     variant="outline"
                     size="sm"
                     className="gap-2"
+                    onClick={() => navigate(getAdminAddressStatsPath(address.id))}
+                  >
+                    <BarChart3 className="w-4 h-4" />
+                    Statystyki
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
                     onClick={() => handleOpenEdit(address)}
                   >
                     <Edit className="w-4 h-4" />
@@ -446,29 +649,7 @@ export const AddressesManagement = () => {
           </div>
         )}
 
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <p className="text-sm text-muted-foreground">
-            Strona {currentPage} z {totalPages}
-          </p>
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={currentPage <= 1}
-              onClick={() => setPage(prev => Math.max(1, prev - 1))}
-            >
-              Poprzednia
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={currentPage >= totalPages}
-              onClick={() => setPage(prev => Math.min(totalPages, prev + 1))}
-            >
-              Następna
-            </Button>
-          </div>
-        </div>
+        <PaginationControls />
       </main>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>

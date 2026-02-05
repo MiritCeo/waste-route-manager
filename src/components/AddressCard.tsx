@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Check, Clock, ChevronRight, AlertTriangle } from 'lucide-react';
 import { Address, AddressStatus } from '@/types/waste';
 import { cn } from '@/lib/utils';
@@ -5,7 +6,8 @@ import { cn } from '@/lib/utils';
 interface AddressCardProps {
   address: Address;
   hasDraft?: boolean;
-  onClick: () => void;
+  onSelect: (addressId: string) => void;
+  className?: string;
 }
 
 const getAddressStatus = (address: Address): AddressStatus => {
@@ -20,7 +22,7 @@ const STATUS_LABELS: Record<AddressStatus, string> = {
   ISSUE: 'Problem',
 };
 
-export const AddressCard = ({ address, hasDraft, onClick }: AddressCardProps) => {
+export const AddressCard = memo(({ address, hasDraft, onSelect, className }: AddressCardProps) => {
   const status = getAddressStatus(address);
   const isCollected = status === 'COLLECTED';
   const isIssue = status === 'ISSUE';
@@ -29,7 +31,7 @@ export const AddressCard = ({ address, hasDraft, onClick }: AddressCardProps) =>
 
   return (
     <button
-      onClick={onClick}
+      onClick={() => onSelect(address.id)}
       className={cn(
         'w-full bg-card rounded-2xl p-4 shadow-sm border',
         'flex items-center gap-4 transition-all duration-150',
@@ -41,6 +43,8 @@ export const AddressCard = ({ address, hasDraft, onClick }: AddressCardProps) =>
             : isDeferred
               ? 'border-warning/30 bg-warning/5'
               : 'border-border active:bg-accent/50'
+        ,
+        className
       )}
     >
       {/* Status Icon */}
@@ -106,4 +110,6 @@ export const AddressCard = ({ address, hasDraft, onClick }: AddressCardProps) =>
       )} />
     </button>
   );
-};
+});
+
+AddressCard.displayName = 'AddressCard';

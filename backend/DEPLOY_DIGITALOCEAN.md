@@ -267,4 +267,4 @@ systemctl restart waste-backend
 
 mysql -u root -p -e "USE waste_route_manager; UPDATE User SET pinHash='${$2a$10$uOmTk4xVossXgBZi2gvJye7bgIoZf5At40rsjdL4480MTvrPzOcGm}' WHERE employeeId='002'; SELECT employeeId, LENGTH(pinHash) AS len FROM User WHERE employeeId='002';"
 
-$2a$10$uOmTk4xVossXgBZi2gvJye7bgIoZf5At40rsjdL4480MTvrPzOcGm
+$2a$10$uOmTk4xVossXgBZi2gvJye7bgIoZf5At40rsjdL4480MTvrPzOcGm 

@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { Header } from '@/components/Header';
 import { AdminHeaderRight } from '@/components/AdminHeaderRight';
 import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -134,6 +135,7 @@ export const EmployeesManagement = () => {
   const currentPage = Math.min(page, totalPages);
   const paginatedEmployees = sortedEmployees.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const adminCount = employees.filter(employee => employee.role === 'ADMIN').length;
+  const missingPermissionsCount = employees.filter(employee => (employee.permissions || []).length === 0).length;
 
   const getRoleBadgeColor = (role: UserType['role']) => {
     const colors = {
@@ -250,6 +252,32 @@ export const EmployeesManagement = () => {
       />
 
       <main className="p-4 pb-8 space-y-4 max-w-7xl mx-auto">
+        {missingPermissionsCount > 0 && (
+          <Alert variant="destructive">
+            <AlertTitle>Konta bez uprawnień</AlertTitle>
+            <AlertDescription>
+              {missingPermissionsCount} {missingPermissionsCount === 1 ? 'konto nie ma' : 'konta nie mają'} ustawionych uprawnień
+              i korzystają z domyślnych uprawnień wynikających z roli.
+            </AlertDescription>
+          </Alert>
+        )}
+        <div className="bg-card rounded-2xl border border-border p-4">
+          <p className="text-sm font-semibold text-foreground">Legenda ról i domyślnych uprawnień</p>
+          <div className="mt-3 grid gap-2 md:grid-cols-3 text-sm">
+            {(['DRIVER', 'MANAGER', 'ADMIN'] as const).map(role => (
+              <div key={role} className="rounded-xl border border-border bg-background px-3 py-2">
+                <div className="flex items-center gap-2">
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${getRoleBadgeColor(role)}`}>
+                    {ROLE_LABELS[role]}
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  {ROLE_PERMISSIONS[role].map(permission => PERMISSION_LABELS[permission]).join(', ')}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
         {/* Action bar */}
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <div className="relative flex-1">

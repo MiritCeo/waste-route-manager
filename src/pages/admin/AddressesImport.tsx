@@ -55,6 +55,8 @@ type ParsedAddress = {
   occurrences: number;
   owner?: string;
   compost?: string;
+  declarationNumber?: string;
+  rowId?: string;
 };
 
 type DuplicateInfo = {
@@ -279,12 +281,21 @@ const normalizeOwner = (value?: string) => {
   return value.toLowerCase().replace(/\s+/g, ' ').trim();
 };
 
+const normalizeDeclarationNumber = (value?: string) => {
+  if (!value) return '';
+  return value.toLowerCase().replace(/\s+/g, ' ').trim();
+};
+
 const buildImportKey = (entry: ParsedAddress) => {
   const baseKey = buildAddressKey(entry);
   if (entry.source === 'company') {
     return `${baseKey}::company::${normalizeOwner(entry.owner)}`;
   }
-  return `${baseKey}::residential`;
+  const declarationKey = normalizeDeclarationNumber(entry.declarationNumber);
+  if (declarationKey) {
+    return `${baseKey}::residential::${declarationKey}`;
+  }
+  return `${baseKey}::residential::${entry.rowId ?? Math.random().toString(36).slice(2)}`;
 };
 
 const parseDateValue = (value?: string): number => {
@@ -523,7 +534,9 @@ export const AddressesImport = () => {
     let invalidRows = 0;
     const invalidEntries: InvalidAddressRow[] = [];
 
-    rows.slice(1).forEach(row => {
+    rows.slice(1).forEach((row, index) => {
+      const rowIndex = index + 1;
+      const rowId = `residential_${rowIndex}`;
       const addressValue = row[1]?.trim();
       const declarationNumber = row[2]?.trim();
       const changeFrom = row[3]?.trim();
@@ -586,7 +599,9 @@ export const AddressesImport = () => {
         return;
       }
 
-      const key = buildAddressKey({ street, number, city, postalCode });
+      const baseKey = buildAddressKey({ street, number, city, postalCode });
+      const declarationKey = normalizeDeclarationNumber(declarationNumber);
+      const key = declarationKey ? `${baseKey}::${declarationKey}` : `${baseKey}::${rowId}`;
       const existing = groups.get(key);
       const timestamp = parseDateValue(changeFrom);
 
@@ -618,6 +633,7 @@ export const AddressesImport = () => {
         residents,
         rate,
         compost,
+        rowId,
         latestTimestamp: timestamp,
       });
     });
@@ -643,6 +659,8 @@ export const AddressesImport = () => {
         source: entry.source,
         occurrences: entry.occurrences,
           compost: entry.compost,
+        declarationNumber: entry.declarationNumber,
+        rowId: entry.rowId,
       };
     });
 

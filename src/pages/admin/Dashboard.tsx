@@ -9,6 +9,7 @@ import {
   Activity,
   Route as RouteIcon,
   AlertTriangle,
+  BarChart3,
 } from 'lucide-react';
 import { Header } from '@/components/Header';
 import { AdminHeaderRight } from '@/components/AdminHeaderRight';
@@ -143,6 +144,23 @@ export const AdminDashboard = () => {
             <p className="text-2xl font-bold text-foreground">{issuesCount}</p>
             <p className="text-sm text-muted-foreground">Powiadomienia</p>
           </div>
+        </div>
+
+        <div className="bg-card rounded-2xl p-5 border border-border">
+          <div className="flex items-center gap-3 mb-4">
+            <BarChart3 className="w-5 h-5 text-primary" />
+            <div>
+              <p className="font-semibold text-foreground">Statystyka ogólna adresów</p>
+              <p className="text-sm text-muted-foreground">Zestawienie zebranych odpadów per adres</p>
+            </div>
+          </div>
+          <button
+            className="px-4 py-2 rounded-xl border border-border hover:border-primary/50 transition-colors text-sm flex items-center gap-2"
+            onClick={() => navigate(ROUTES.ADMIN.ADDRESS_STATS_OVERVIEW)}
+          >
+            <BarChart3 className="w-4 h-4 text-primary" />
+            Otwórz statystykę adresów
+          </button>
         </div>
 
         {/* Progress overview */}

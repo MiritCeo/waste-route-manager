@@ -1,14 +1,17 @@
 import { ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAdminBreadcrumb } from '@/contexts/AdminBreadcrumbContext';
 
 interface HeaderProps {
   title: string;
   subtitle?: string;
   onBack?: () => void;
   rightElement?: React.ReactNode;
+  showBreadcrumb?: boolean;
 }
 
-export const Header = ({ title, subtitle, onBack, rightElement }: HeaderProps) => {
+export const Header = ({ title, subtitle, onBack, rightElement, showBreadcrumb = true }: HeaderProps) => {
+  const { breadcrumb } = useAdminBreadcrumb();
   return (
     <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border safe-top">
       <div className="flex items-center gap-3 px-4 py-4">
@@ -27,6 +30,9 @@ export const Header = ({ title, subtitle, onBack, rightElement }: HeaderProps) =
         )}
 
         <div className="flex-1 min-w-0">
+          {showBreadcrumb && breadcrumb && (
+            <p className="text-xs text-muted-foreground truncate">{breadcrumb}</p>
+          )}
           <h1 className="text-xl font-bold text-foreground truncate">{title}</h1>
           {subtitle && (
             <p className="text-sm text-muted-foreground truncate">{subtitle}</p>

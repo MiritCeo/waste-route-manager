@@ -3,6 +3,7 @@ import { Permission } from '@/types/user';
 export const ALL_PERMISSIONS: Permission[] = [
   'VIEW_ROUTES',
   'COLLECT_WASTE',
+  'VIEW_WARNINGS',
   'MANAGE_ROUTES',
   'MANAGE_ADDRESSES',
   'MANAGE_USERS',
@@ -13,6 +14,7 @@ export const ALL_PERMISSIONS: Permission[] = [
 export const PERMISSION_LABELS: Record<Permission, string> = {
   VIEW_ROUTES: 'Podgląd tras',
   COLLECT_WASTE: 'Odbiór odpadów',
+  VIEW_WARNINGS: 'Podgląd ostrzeżeń',
   MANAGE_ROUTES: 'Zarządzanie trasami',
   MANAGE_ADDRESSES: 'Zarządzanie adresami',
   MANAGE_USERS: 'Zarządzanie użytkownikami',

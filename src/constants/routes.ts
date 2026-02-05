@@ -20,6 +20,8 @@ export const ROUTES = {
     DASHBOARD: '/admin/dashboard',
     ROUTES: '/admin/routes',
     ADDRESSES: '/admin/addresses',
+    ADDRESS_STATS: '/admin/addresses/:addressId/stats',
+    ADDRESS_STATS_OVERVIEW: '/admin/addresses/stats',
     IMPORT: '/admin/import',
     EMPLOYEES: '/admin/employees',
     STATISTICS: '/admin/statistics',
@@ -41,6 +43,9 @@ export const getAdminRoutePath = (routeId: string) =>
 
 export const getAdminAddressPath = (addressId: string) => 
   `/admin/addresses/${addressId}`;
+
+export const getAdminAddressStatsPath = (addressId: string) =>
+  `/admin/addresses/${addressId}/stats`;
 
 export const getAdminEmployeePath = (userId: string) => 
   `/admin/employees/${userId}`;

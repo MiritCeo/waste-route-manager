@@ -3,6 +3,8 @@ import {
   AdminAddress,
   AdminRoute,
   DashboardStats,
+  AddressStats,
+  AddressStatsSummaryRow,
   StatisticsData,
   StatisticsFilters,
   IssueReport,
@@ -51,6 +53,14 @@ class AdminService {
 
   async getAddresses(params?: AdminAddressesQuery): Promise<AdminAddress[]> {
     return apiClient.get<AdminAddress[]>('/admin/addresses', params);
+  }
+
+  async getAddressStats(addressId: string): Promise<AddressStats> {
+    return apiClient.get<AddressStats>(`/admin/addresses/${addressId}/stats`);
+  }
+
+  async getAddressStatsSummary(): Promise<AddressStatsSummaryRow[]> {
+    return apiClient.get<AddressStatsSummaryRow[]>('/admin/addresses/stats-summary');
   }
 
   async createAddress(data: CreateAddressDto): Promise<AdminAddress> {

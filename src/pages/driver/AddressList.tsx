@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Address } from '@/types/waste';
 import { AddressCard } from '@/components/AddressCard';
@@ -10,6 +10,7 @@ import { AddressStatus } from '@/types/waste';
 import { ROUTES } from '@/constants/routes';
 import { WASTE_OPTIONS } from '@/constants/waste';
 import { toast } from 'sonner';
+import { CloudOff } from 'lucide-react';
 
 export const AddressList = () => {
   const { routeId } = useParams<{ routeId: string }>();
@@ -21,9 +22,22 @@ export const AddressList = () => {
     getRouteById,
     selectedWasteTypes,
     hasCollectionDraft,
+    syncQueueCount,
   } = useRoutes();
   const [filter, setFilter] = useState<FilterType>('all');
   const [isLoading, setIsLoading] = useState(true);
+  const listRef = useRef<HTMLDivElement | null>(null);
+  const rafRef = useRef<number | null>(null);
+  const [viewportHeight, setViewportHeight] = useState(0);
+  const [scrollTop, setScrollTop] = useState(0);
+
+  const [rowHeight, setRowHeight] = useState(112);
+  const OVERSCAN = 6;
+
+  const scrollStorageKey = useMemo(() => {
+    if (!routeId) return '';
+    return `driver.route.scroll.${routeId}.${filter}`;
+  }, [routeId, filter]);
 
   // Calculate counts - MUST be before any conditional returns
   const counts = useMemo(() => {
@@ -65,6 +79,28 @@ export const AddressList = () => {
     }
   }, [selectedRoute, filter]);
 
+  const handleScroll = useCallback(() => {
+    const current = listRef.current;
+    if (!current) return;
+    const top = current.scrollTop;
+    if (scrollStorageKey) {
+      sessionStorage.setItem(scrollStorageKey, String(top));
+    }
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+    }
+    rafRef.current = requestAnimationFrame(() => {
+      setScrollTop(top);
+    });
+  }, [scrollStorageKey]);
+
+  const saveScrollPosition = useCallback(() => {
+    if (!scrollStorageKey) return;
+    const current = listRef.current;
+    if (!current) return;
+    sessionStorage.setItem(scrollStorageKey, String(current.scrollTop));
+  }, [scrollStorageKey]);
+
   // Load route on mount
   useEffect(() => {
     const loadRoute = async () => {
@@ -104,16 +140,75 @@ export const AddressList = () => {
     };
 
     loadRoute();
+    return () => {
+      saveScrollPosition();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeId]); // Only re-run when routeId changes
+
+  useEffect(() => {
+    if (!scrollStorageKey) return;
+    const stored = sessionStorage.getItem(scrollStorageKey);
+    if (!stored) return;
+    const target = listRef.current;
+    if (!target) return;
+    const value = Number(stored);
+    if (Number.isNaN(value)) return;
+    target.scrollTop = value;
+    setScrollTop(value);
+  }, [scrollStorageKey, filteredAddresses.length]);
+
+  useEffect(() => {
+    const target = listRef.current;
+    if (!target) return;
+    const updateHeight = () => {
+      setViewportHeight(target.clientHeight);
+    };
+    updateHeight();
+    if (typeof ResizeObserver === 'undefined') {
+      window.addEventListener('resize', updateHeight);
+      return () => window.removeEventListener('resize', updateHeight);
+    }
+    const observer = new ResizeObserver(updateHeight);
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [filteredAddresses.length]);
+
+  useEffect(() => {
+    const updateRowHeight = () => {
+      const width = window.innerWidth;
+      if (width <= 360) {
+        setRowHeight(132);
+      } else if (width <= 768) {
+        setRowHeight(118);
+      } else {
+        setRowHeight(108);
+      }
+    };
+    updateRowHeight();
+    window.addEventListener('resize', updateRowHeight);
+    return () => window.removeEventListener('resize', updateRowHeight);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (rafRef.current) {
+        cancelAnimationFrame(rafRef.current);
+      }
+    };
+  }, []);
 
   const handleBack = () => {
     navigate(ROUTES.DRIVER.ROUTES);
   };
 
-  const handleSelectAddress = (address: Address) => {
-    navigate(`/driver/collect/${routeId}/${address.id}`);
-  };
+  const handleSelectAddress = useCallback(
+    (addressId: string) => {
+      saveScrollPosition();
+      navigate(`/driver/collect/${routeId}/${addressId}`);
+    },
+    [navigate, routeId, saveScrollPosition]
+  );
 
 
   // NOW we can do conditional rendering
@@ -128,12 +223,29 @@ export const AddressList = () => {
     );
   }
 
+  const totalHeight = filteredAddresses.length * rowHeight;
+  const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight) - OVERSCAN);
+  const endIndex = Math.min(
+    filteredAddresses.length - 1,
+    Math.ceil((scrollTop + viewportHeight) / rowHeight) + OVERSCAN
+  );
+  const visibleItems = filteredAddresses.slice(startIndex, endIndex + 1);
+  const offsetTop = startIndex * rowHeight;
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Header
         title={selectedRoute.name}
         subtitle={`${selectedRoute.addresses.length} adresów`}
         onBack={handleBack}
+        rightElement={
+          syncQueueCount > 0 ? (
+            <div className="px-3 py-1 rounded-full border border-warning/30 bg-warning/10 text-warning text-xs font-semibold flex items-center gap-2">
+              <CloudOff className="w-4 h-4" />
+              {syncQueueCount}
+            </div>
+          ) : undefined
+        }
       />
 
       <div className="px-4 py-3 space-y-4 bg-background sticky top-[73px] z-40 border-b border-border">
@@ -163,7 +275,7 @@ export const AddressList = () => {
         />
       </div>
 
-      <main className="flex-1 p-4 space-y-3 pb-8">
+      <main className="flex-1 p-4 pb-8 overflow-auto" ref={listRef} onScroll={handleScroll}>
         {filteredAddresses.length === 0 ? (
           <div className="text-center py-12">
             <p className="text-muted-foreground text-lg">
@@ -175,14 +287,20 @@ export const AddressList = () => {
             </p>
           </div>
         ) : (
-          filteredAddresses.map((address) => (
-            <AddressCard
-              key={address.id}
-              address={address}
-              hasDraft={routeId ? hasCollectionDraft(routeId, address.id) : false}
-              onClick={() => handleSelectAddress(address)}
-            />
-          ))
+          <div style={{ height: totalHeight, position: 'relative' }}>
+            <div style={{ transform: `translateY(${offsetTop}px)` }}>
+              {visibleItems.map((address) => (
+                <div key={address.id} style={{ height: rowHeight }} className="pb-2 last:pb-0">
+                  <AddressCard
+                    address={address}
+                    hasDraft={routeId ? hasCollectionDraft(routeId, address.id) : false}
+                    onSelect={handleSelectAddress}
+                    className="h-full"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
         )}
       </main>
     </div>

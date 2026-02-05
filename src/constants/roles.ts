@@ -8,11 +8,13 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   MANAGER: [
     'VIEW_ROUTES',
     'COLLECT_WASTE',
+    'VIEW_WARNINGS',
     'VIEW_STATISTICS',
   ],
   ADMIN: [
     'VIEW_ROUTES',
     'COLLECT_WASTE',
+    'VIEW_WARNINGS',
     'MANAGE_ROUTES',
     'MANAGE_ADDRESSES',
     'MANAGE_USERS',

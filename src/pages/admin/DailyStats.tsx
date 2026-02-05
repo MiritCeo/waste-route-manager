@@ -80,7 +80,7 @@ export const DailyStats = () => {
       <Header
         title="Statystyki dzienne"
         subtitle="Zestawienie ilości odpadów per dzień"
-        onBack={() => navigate(ROUTES.ADMIN.DASHBOARD)}
+        onBack={() => navigate(-1)}
         rightElement={<AdminHeaderRight />}
       />
 

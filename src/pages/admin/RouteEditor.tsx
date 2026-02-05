@@ -40,6 +40,9 @@ export const RouteEditor = () => {
   const [addresses, setAddresses] = useState<AdminAddress[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [addressSearch, setAddressSearch] = useState('');
+  const [addressFilter, setAddressFilter] = useState<'all' | 'active' | 'inactive'>('all');
+  const [assignmentFilter, setAssignmentFilter] = useState<'all' | 'unassigned'>('all');
+  const [assignedAddressIds, setAssignedAddressIds] = useState<string[]>([]);
   const [movedMap, setMovedMap] = useState<Record<string, { from: number; to: number }>>({});
   const [draftInfo, setDraftInfo] = useState<RouteDraft | null>(null);
   const [showDraftPrompt, setShowDraftPrompt] = useState(false);
@@ -55,6 +58,7 @@ export const RouteEditor = () => {
       addressIds: [],
     },
   });
+  const selectedAddressIds = form.watch('addressIds');
 
   const draftStorageKey = `admin.routeDraft.${routeId ?? 'new'}`;
 
@@ -97,10 +101,14 @@ export const RouteEditor = () => {
       try {
         setIsLoading(true);
         const [addressData, routeData] = await Promise.all([
-          adminService.getAddresses({ active: true }),
+          adminService.getAddresses(),
           adminService.getRoutes(),
         ]);
         setAddresses(addressData);
+        const assignedIds = routeData
+          .filter(item => item.id !== routeId)
+          .flatMap(item => item.addressIds || []);
+        setAssignedAddressIds(assignedIds);
         if (isEdit) {
           const route = routeData.find(item => item.id === routeId);
           if (!route) {
@@ -157,14 +165,43 @@ export const RouteEditor = () => {
   }, [form]);
 
   const filteredAddresses = useMemo(() => {
-    if (!addressSearch.trim()) return addresses;
-    const search = addressSearch.toLowerCase();
-    return addresses.filter(address =>
-      address.street.toLowerCase().includes(search) ||
-      address.city.toLowerCase().includes(search) ||
-      address.number.toLowerCase().includes(search)
-    );
-  }, [addresses, addressSearch]);
+    const search = addressSearch.trim().toLowerCase();
+    let filtered = !search
+      ? addresses
+      : addresses.filter(address =>
+          address.street.toLowerCase().includes(search) ||
+          address.city.toLowerCase().includes(search) ||
+          address.number.toLowerCase().includes(search)
+        );
+    if (addressFilter === 'active') {
+      filtered = filtered.filter(address => address.active);
+    }
+    if (addressFilter === 'inactive') {
+      filtered = filtered.filter(address => !address.active);
+    }
+    if (assignmentFilter === 'unassigned') {
+      const assignedSet = new Set(assignedAddressIds);
+      filtered = filtered.filter(
+        address => !assignedSet.has(address.id) || selectedAddressIds.includes(address.id)
+      );
+    }
+    return [...filtered].sort((a, b) => Number(b.active) - Number(a.active));
+  }, [addresses, addressSearch, addressFilter, assignmentFilter, assignedAddressIds, selectedAddressIds]);
+
+  const availableActive = useMemo(
+    () => filteredAddresses.filter(address => address.active),
+    [filteredAddresses]
+  );
+  const availableInactive = useMemo(
+    () => filteredAddresses.filter(address => !address.active),
+    [filteredAddresses]
+  );
+
+  const inactiveSelectedCount = useMemo(() => {
+    if (!addresses.length) return 0;
+    const selected = new Set(form.getValues('addressIds'));
+    return addresses.filter(address => selected.has(address.id) && !address.active).length;
+  }, [addresses, form]);
 
   const isCompanyAddress = (address: AdminAddress) => {
     return Boolean(address.notes?.includes('Typ: Firma') || address.notes?.includes('Właściciel:'));
@@ -291,6 +328,15 @@ export const RouteEditor = () => {
             </div>
           </Alert>
         )}
+        {inactiveSelectedCount > 0 && (
+          <Alert variant="destructive">
+            <AlertTitle>Trasa zawiera nieaktywne adresy</AlertTitle>
+            <AlertDescription>
+              {inactiveSelectedCount} {inactiveSelectedCount === 1 ? 'adres jest' : 'adresy są'} oznaczone jako nieaktywne.
+              Usuń je z trasy lub aktywuj w bazie adresów.
+            </AlertDescription>
+          </Alert>
+        )}
         <Form {...form}>
           <form className="space-y-4" onSubmit={form.handleSubmit(handleSubmit)}>
             <div className="flex items-center justify-between gap-3">
@@ -336,6 +382,48 @@ export const RouteEditor = () => {
                 />
               </div>
             </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={addressFilter === 'all' ? 'default' : 'outline'}
+                onClick={() => setAddressFilter('all')}
+              >
+                Wszystkie
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={addressFilter === 'active' ? 'default' : 'outline'}
+                onClick={() => setAddressFilter('active')}
+              >
+                Tylko aktywne
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={addressFilter === 'inactive' ? 'default' : 'outline'}
+                onClick={() => setAddressFilter('inactive')}
+              >
+                Tylko nieaktywne
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={assignmentFilter === 'unassigned' ? 'default' : 'outline'}
+                onClick={() => setAssignmentFilter('unassigned')}
+              >
+                Tylko nieprzypisane
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={assignmentFilter === 'all' ? 'default' : 'outline'}
+                onClick={() => setAssignmentFilter('all')}
+              >
+                Wszystkie przypisania
+              </Button>
+            </div>
 
             <FormField
               control={form.control}
@@ -347,18 +435,20 @@ export const RouteEditor = () => {
                     <div className="rounded-xl border border-dashed border-border p-3 space-y-2">
                       <p className="text-xs text-muted-foreground">Dostępne adresy</p>
                       <div className="max-h-[60vh] overflow-auto space-y-2">
-                        {filteredAddresses.map(address => {
+                        {availableActive.map(address => {
                           const isAdded = field.value.includes(address.id);
+                          const isInactive = !address.active;
                           return (
                             <button
                               key={address.id}
                               type="button"
                               className={cn(
                                 'flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm',
-                                isAdded ? 'text-muted-foreground line-through' : 'hover:bg-muted/50'
+                                isAdded ? 'text-muted-foreground line-through' : 'hover:bg-muted/50',
+                                isInactive && 'opacity-60 cursor-not-allowed hover:bg-transparent'
                               )}
                               onClick={() => {
-                                if (isAdded) return;
+                                if (isAdded || isInactive) return;
                                 field.onChange([...field.value, address.id]);
                               }}
                             >
@@ -369,6 +459,11 @@ export const RouteEditor = () => {
                                     Firma
                                   </span>
                                 )}
+                                {!address.active && (
+                                  <span className="px-2 py-0.5 rounded-full text-xs font-medium border border-destructive/40 text-destructive">
+                                    Nieaktywna
+                                  </span>
+                                )}
                               </span>
                               <span className="text-xs text-muted-foreground flex items-center gap-1">
                                 {isAdded ? 'Dodano' : 'Dodaj'} {!isAdded && <MoveRight className="w-3 h-3" />}
@@ -376,6 +471,45 @@ export const RouteEditor = () => {
                             </button>
                           );
                         })}
+                        {availableInactive.length > 0 && (
+                          <div className="pt-3">
+                            <p className="text-xs text-muted-foreground mb-2">Archiwum</p>
+                            <div className="space-y-2">
+                              {availableInactive.map(address => {
+                                const isAdded = field.value.includes(address.id);
+                                return (
+                                  <button
+                                    key={address.id}
+                                    type="button"
+                                    className={cn(
+                                      'flex w-full items-center justify-between rounded-lg px-3 py-2 text-sm',
+                                      isAdded ? 'text-muted-foreground line-through' : 'hover:bg-muted/50',
+                                      'opacity-60 cursor-not-allowed hover:bg-transparent'
+                                    )}
+                                    onClick={() => {
+                                      if (isAdded) return;
+                                    }}
+                                  >
+                                    <span className="flex items-center gap-2">
+                                      <span>{address.street} {address.number}, {address.city}</span>
+                                      {isCompanyAddress(address) && (
+                                        <span className="px-2 py-0.5 rounded-full text-xs font-medium border bg-primary/10 text-primary border-primary/20">
+                                          Firma
+                                        </span>
+                                      )}
+                                      <span className="px-2 py-0.5 rounded-full text-xs font-medium border border-destructive/40 text-destructive">
+                                        Nieaktywna
+                                      </span>
+                                    </span>
+                                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                      {isAdded ? 'Dodano' : 'Archiwum'}
+                                    </span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
                         {filteredAddresses.length === 0 && (
                           <p className="text-sm text-muted-foreground">Brak adresów do wyboru</p>
                         )}
@@ -422,7 +556,8 @@ export const RouteEditor = () => {
                               key={address.id}
                               className={cn(
                                 'flex items-center gap-2 rounded-lg border bg-background px-3 py-2 text-sm',
-                                isMoved ? 'border-primary/50 bg-primary/5' : 'border-border'
+                                isMoved ? 'border-primary/50 bg-primary/5' : 'border-border',
+                                !address.active && 'border-destructive/40 bg-destructive/5'
                               )}
                             >
                               <span className={cn('w-6 text-xs', isMoved ? 'text-primary' : 'text-muted-foreground')}>
@@ -434,6 +569,11 @@ export const RouteEditor = () => {
                               {isCompanyAddress(address) && (
                                 <span className="px-2 py-0.5 rounded-full text-xs font-medium border bg-primary/10 text-primary border-primary/20">
                                   Firma
+                                </span>
+                              )}
+                              {!address.active && (
+                                <span className="px-2 py-0.5 rounded-full text-xs font-medium border border-destructive/40 text-destructive">
+                                  Nieaktywna
                                 </span>
                               )}
                               {isMoved && moveInfo && (

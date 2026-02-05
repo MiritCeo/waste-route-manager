@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RouteCard } from '@/components/RouteCard';
 import { Header } from '@/components/Header';
-import { Truck, BarChart3, Settings2, LogOut } from 'lucide-react';
+import { Truck, BarChart3, Settings2, LogOut, CloudOff } from 'lucide-react';
 import logo from '@/assets/kompaktowy-pleszew-logo.png';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRoutes } from '@/contexts/RouteContext';
@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 export const RouteSelection = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const { routes, isLoading, setSelectedRoute, selectedWasteTypes, setSelectedWasteTypes } = useRoutes();
+  const { routes, isLoading, setSelectedRoute, selectedWasteTypes, setSelectedWasteTypes, syncQueueCount } = useRoutes();
   const [selectionDraft, setSelectionDraft] = useState<WasteType[]>([]);
   const [showSelection, setShowSelection] = useState(false);
 
@@ -104,14 +104,22 @@ export const RouteSelection = () => {
           day: 'numeric' 
         })}
         rightElement={
-          <Button
-            onClick={handleLogout}
-            variant="outline"
-            className="gap-2 border-destructive/30 text-destructive hover:bg-destructive/10"
-          >
-            <LogOut className="w-4 h-4" />
-            Wyloguj
-          </Button>
+          <div className="flex items-center gap-2">
+            {syncQueueCount > 0 && (
+              <div className="px-3 py-1 rounded-full border border-warning/30 bg-warning/10 text-warning text-xs font-semibold flex items-center gap-2">
+                <CloudOff className="w-4 h-4" />
+                {syncQueueCount}
+              </div>
+            )}
+            <Button
+              onClick={handleLogout}
+              variant="outline"
+              className="gap-2 border-destructive/30 text-destructive hover:bg-destructive/10"
+            >
+              <LogOut className="w-4 h-4" />
+              Wyloguj
+            </Button>
+          </div>
         }
       />
 

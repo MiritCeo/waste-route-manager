@@ -10,6 +10,9 @@ import { IssuesManagement } from '@/pages/admin/IssuesManagement';
 import { RouteEditor } from '@/pages/admin/RouteEditor';
 import { DailyStats } from '@/pages/admin/DailyStats';
 import { AddressesImport } from '@/pages/admin/AddressesImport';
+import { AddressStats } from '@/pages/admin/AddressStats';
+import { AddressStatsOverview } from '@/pages/admin/AddressStatsOverview';
+import { AdminLayout } from '@/layouts/AdminLayout';
 
 export const AdminRoutes = () => {
   return (
@@ -18,105 +21,124 @@ export const AdminRoutes = () => {
         path="/"
         element={<Navigate to="/admin/dashboard" replace />}
       />
-      
-      <Route
-        path="/dashboard"
-        element={
-          <ProtectedRoute requiredPermissions={['VIEW_STATISTICS', 'MANAGE_ROUTES']} requireAll={false}>
-            <AdminDashboard />
-          </ProtectedRoute>
-        }
-      />
-      
-      <Route
-        path="/routes"
-        element={
-          <ProtectedRoute requiredPermission="MANAGE_ROUTES">
-            <RoutesManagement />
-          </ProtectedRoute>
-        }
-      />
+      <Route element={<AdminLayout />}>
+        <Route
+          path="/dashboard"
+          element={
+            <ProtectedRoute requiredPermissions={['VIEW_STATISTICS', 'MANAGE_ROUTES']} requireAll={false}>
+              <AdminDashboard />
+            </ProtectedRoute>
+          }
+        />
+        
+        <Route
+          path="/routes"
+          element={
+            <ProtectedRoute requiredPermission="MANAGE_ROUTES">
+              <RoutesManagement />
+            </ProtectedRoute>
+          }
+        />
 
-      <Route
-        path="/routes/new"
-        element={
-          <ProtectedRoute requiredPermission="MANAGE_ROUTES">
-            <RouteEditor />
-          </ProtectedRoute>
-        }
-      />
+        <Route
+          path="/routes/new"
+          element={
+            <ProtectedRoute requiredPermission="MANAGE_ROUTES">
+              <RouteEditor />
+            </ProtectedRoute>
+          }
+        />
 
-      <Route
-        path="/routes/:routeId/edit"
-        element={
-          <ProtectedRoute requiredPermission="MANAGE_ROUTES">
-            <RouteEditor />
-          </ProtectedRoute>
-        }
-      />
-      
-      <Route
-        path="/addresses"
-        element={
-          <ProtectedRoute requiredPermission="MANAGE_ADDRESSES">
-            <AddressesManagement />
-          </ProtectedRoute>
-        }
-      />
+        <Route
+          path="/routes/:routeId/edit"
+          element={
+            <ProtectedRoute requiredPermission="MANAGE_ROUTES">
+              <RouteEditor />
+            </ProtectedRoute>
+          }
+        />
+        
+        <Route
+          path="/addresses"
+          element={
+            <ProtectedRoute requiredPermission="MANAGE_ADDRESSES">
+              <AddressesManagement />
+            </ProtectedRoute>
+          }
+        />
 
-      <Route
-        path="/import"
-        element={
-          <ProtectedRoute requiredPermission="MANAGE_ADDRESSES">
-            <AddressesImport />
-          </ProtectedRoute>
-        }
-      />
-      
-      <Route
-        path="/employees"
-        element={
-          <ProtectedRoute requiredPermission="MANAGE_USERS">
-            <EmployeesManagement />
-          </ProtectedRoute>
-        }
-      />
-      
-      <Route
-        path="/statistics"
-        element={
-          <ProtectedRoute requiredPermission="VIEW_STATISTICS">
-            <Statistics />
-          </ProtectedRoute>
-        }
-      />
+        <Route
+          path="/addresses/stats"
+          element={
+            <ProtectedRoute requiredPermission="MANAGE_ADDRESSES">
+              <AddressStatsOverview />
+            </ProtectedRoute>
+          }
+        />
 
-      <Route
-        path="/daily-stats"
-        element={
-          <ProtectedRoute requiredPermission="VIEW_STATISTICS">
-            <DailyStats />
-          </ProtectedRoute>
-        }
-      />
+        <Route
+          path="/addresses/:addressId/stats"
+          element={
+            <ProtectedRoute requiredPermission="MANAGE_ADDRESSES">
+              <AddressStats />
+            </ProtectedRoute>
+          }
+        />
+        
+        <Route
+          path="/import"
+          element={
+            <ProtectedRoute requiredPermission="MANAGE_ADDRESSES">
+              <AddressesImport />
+            </ProtectedRoute>
+          }
+        />
+        
+        <Route
+          path="/employees"
+          element={
+            <ProtectedRoute requiredPermission="MANAGE_USERS">
+              <EmployeesManagement />
+            </ProtectedRoute>
+          }
+        />
+        
+        <Route
+          path="/statistics"
+          element={
+            <ProtectedRoute requiredPermission="VIEW_STATISTICS">
+              <Statistics />
+            </ProtectedRoute>
+          }
+        />
 
-      <Route
-        path="/issues"
-        element={
-          <ProtectedRoute requiredPermission="MANAGE_ADDRESSES">
-            <IssuesManagement />
-          </ProtectedRoute>
-        }
-      />
-      
-      <Route
-        path="/settings"
-        element={
-          <ProtectedRoute requiredPermission="MANAGE_SETTINGS">
-            <Settings />
-          </ProtectedRoute>
-        }
-      />
+        <Route
+          path="/daily-stats"
+          element={
+            <ProtectedRoute requiredPermission="VIEW_STATISTICS">
+              <DailyStats />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/issues"
+          element={
+            <ProtectedRoute requiredPermission="VIEW_WARNINGS">
+              <IssuesManagement />
+            </ProtectedRoute>
+          }
+        />
+        
+        <Route
+          path="/settings"
+          element={
+            <ProtectedRoute requiredPermission="MANAGE_SETTINGS">
+              <Settings />
+            </ProtectedRoute>
+          }
+        />
+      </Route>
     </Routes>
   );
 };

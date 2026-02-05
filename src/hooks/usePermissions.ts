@@ -1,34 +1,43 @@
 import { useMemo } from 'react';
 import { Permission, UserRole } from '@/types/user';
 import { useAuth } from '@/contexts/AuthContext';
+import { ROLE_PERMISSIONS } from '@/constants/roles';
 
 export const usePermissions = () => {
   const { user } = useAuth();
   const userPermissions = user?.permissions ?? [];
+  const effectivePermissions = useMemo(() => {
+    if (!user) return [];
+    const roleDefaults = ROLE_PERMISSIONS[user.role] || [];
+    if (userPermissions.length === 0) {
+      return roleDefaults;
+    }
+    return Array.from(new Set([...roleDefaults, ...userPermissions]));
+  }, [user, userPermissions]);
 
   const can = useMemo(() => {
     if (!user) return (permission: Permission) => false;
 
     return (permission: Permission): boolean => {
-      return userPermissions.includes(permission);
+      return effectivePermissions.includes(permission);
     };
-  }, [user, userPermissions]);
+  }, [user, effectivePermissions]);
 
   const canAny = useMemo(() => {
     if (!user) return (permissions: Permission[]) => false;
 
     return (permissions: Permission[]): boolean => {
-      return permissions.some(permission => userPermissions.includes(permission));
+      return permissions.some(permission => effectivePermissions.includes(permission));
     };
-  }, [user, userPermissions]);
+  }, [user, effectivePermissions]);
 
   const canAll = useMemo(() => {
     if (!user) return (permissions: Permission[]) => false;
 
     return (permissions: Permission[]): boolean => {
-      return permissions.every(permission => userPermissions.includes(permission));
+      return permissions.every(permission => effectivePermissions.includes(permission));
     };
-  }, [user, userPermissions]);
+  }, [user, effectivePermissions]);
 
   const isRole = useMemo(() => {
     if (!user) return (role: UserRole) => false;

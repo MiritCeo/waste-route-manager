@@ -10,7 +10,7 @@ import {
 } from '@/types/waste';
 import { routesService } from '@/api/services/routes.service';
 import { toast } from 'sonner';
-import { storage } from '@/utils/storage';
+import { cacheManager, storage } from '@/utils/storage';
 import { APP_CONFIG } from '@/constants/config';
 import { useAuth } from './AuthContext';
 
@@ -20,6 +20,7 @@ interface RouteContextType {
   error: string | null;
   selectedRoute: Route | null;
   selectedWasteTypes: WasteType[];
+  syncQueueCount: number;
   hasCollectionDraft: (routeId: string, addressId: string) => boolean;
   getCollectionDraft: (routeId: string, addressId: string) => CollectionDraft | null;
   saveCollectionDraft: (draft: CollectionDraft) => void;
@@ -53,6 +54,17 @@ interface CollectionDraft extends CollectionDetails {
   updatedAt: string;
 }
 
+type SyncOperation = {
+  type: 'UPDATE_ADDRESS';
+  routeId: string;
+  addressId: string;
+  payload: {
+    waste: WasteCategory[];
+    details?: CollectionDetails;
+  };
+  queuedAt: string;
+};
+
 const RouteContext = createContext<RouteContextType | undefined>(undefined);
 
 export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
@@ -61,7 +73,80 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   const [selectedWasteTypes, setSelectedWasteTypesState] = useState<WasteType[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [syncQueueCount, setSyncQueueCount] = useState(0);
   const { isAuthenticated } = useAuth();
+  const pendingUpdatesRef = React.useRef<
+    Map<
+      string,
+      {
+        routeId: string;
+        addressId: string;
+        update: {
+          waste: WasteCategory[];
+          status: AddressStatus;
+          issueReason?: AddressIssueReason;
+          issueFlags?: AddressIssueFlag[];
+          issueNote?: string;
+          issuePhoto?: string;
+        };
+      }
+    >
+  >(new Map());
+  const flushTimerRef = React.useRef<number | null>(null);
+
+  const getSyncQueue = () => cacheManager.getSyncQueue<SyncOperation>();
+
+  const saveSyncQueue = (queue: SyncOperation[]) => {
+    storage.set(APP_CONFIG.STORAGE.SYNC_QUEUE_KEY, queue);
+    setSyncQueueCount(queue.length);
+  };
+
+  const refreshSyncQueueCount = () => {
+    setSyncQueueCount(getSyncQueue().length);
+  };
+
+  const processSyncQueue = async () => {
+    if (!isAuthenticated) return;
+    if (typeof navigator !== 'undefined' && !navigator.onLine) return;
+    const queue = getSyncQueue();
+    if (!queue.length) return;
+
+    const remaining: SyncOperation[] = [];
+    for (const op of queue) {
+      if (op.type !== 'UPDATE_ADDRESS') {
+        remaining.push(op);
+        continue;
+      }
+      try {
+        const updated = await routesService.updateAddressCollection(
+          op.routeId,
+          op.addressId,
+          op.payload.waste,
+          op.payload.details
+        );
+        const resolvedStatus = (updated.status ?? op.payload.details?.status ?? 'COLLECTED') as AddressStatus;
+        applyAddressUpdate(op.routeId, op.addressId, {
+          waste: updated.waste ?? op.payload.waste,
+          status: resolvedStatus,
+          issueReason: updated.issueReason ?? op.payload.details?.issueReason,
+          issueFlags: updated.issueFlags ?? op.payload.details?.issueFlags,
+          issueNote: updated.issueNote ?? op.payload.details?.issueNote,
+          issuePhoto: updated.issuePhoto ?? op.payload.details?.issuePhoto,
+        });
+      } catch {
+        remaining.push(op);
+      }
+    }
+
+    if (remaining.length !== queue.length) {
+      saveSyncQueue(remaining);
+      if (queue.length && remaining.length === 0) {
+        toast.success('Synchronizacja zakończona', {
+          description: 'Zapisane offline odbiory zostały wysłane',
+        });
+      }
+    }
+  };
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -69,10 +154,25 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       setSelectedRoute(null);
       setIsLoading(false);
       setError(null);
+      setSyncQueueCount(0);
       return;
     }
 
+    refreshSyncQueueCount();
     fetchRoutes();
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    processSyncQueue();
+    const handleOnline = () => {
+      processSyncQueue();
+      fetchRoutes();
+    };
+    window.addEventListener('online', handleOnline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+    };
   }, [isAuthenticated]);
 
   useEffect(() => {
@@ -101,12 +201,22 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
       const data = await routesService.getRoutes();
       setRoutes(data);
+      cacheManager.saveRoutes(data);
     } catch (err: any) {
       const message = err?.message || 'Nie udało się pobrać tras';
-      setError(message);
-      toast.error('Błąd', {
-        description: message,
-      });
+      const cached = APP_CONFIG.FEATURES.OFFLINE_MODE ? cacheManager.getRoutes<Route[]>() : null;
+      if (cached && cached.length > 0) {
+        setRoutes(cached);
+        setError(null);
+        toast.success('Tryb offline', {
+          description: 'Wczytano zapisane trasy z pamięci urządzenia',
+        });
+      } else {
+        setError(message);
+        toast.error('Błąd', {
+          description: message,
+        });
+      }
     } finally {
       setIsLoading(false);
     }
@@ -125,6 +235,11 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       return route;
     } catch (err: any) {
       const message = err?.message || 'Nie udało się pobrać trasy';
+      const cached = APP_CONFIG.FEATURES.OFFLINE_MODE ? cacheManager.getRoutes<Route[]>() : null;
+      const cachedRoute = cached?.find(route => route.id === id);
+      if (cachedRoute) {
+        return cachedRoute;
+      }
       toast.error('Błąd', {
         description: message,
       });
@@ -137,7 +252,11 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const updatedRoute = await routesService.getRouteById(routeId);
       
       setRoutes(prev =>
-        prev.map(route => (route.id === routeId ? updatedRoute : route))
+        {
+          const nextRoutes = prev.map(route => (route.id === routeId ? updatedRoute : route));
+          cacheManager.saveRoutes(nextRoutes);
+          return nextRoutes;
+        }
       );
 
       if (selectedRoute?.id === routeId) {
@@ -146,6 +265,102 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     } catch (err: any) {
       console.error('Failed to refresh route:', err);
     }
+  };
+
+  const flushAddressUpdates = () => {
+    const updates = Array.from(pendingUpdatesRef.current.values());
+    if (updates.length === 0) return;
+    pendingUpdatesRef.current.clear();
+    const updatesByRoute = new Map<string, typeof updates>();
+    updates.forEach(update => {
+      if (!updatesByRoute.has(update.routeId)) {
+        updatesByRoute.set(update.routeId, []);
+      }
+      updatesByRoute.get(update.routeId)?.push(update);
+    });
+
+    setRoutes(prevRoutes => {
+      const nextRoutes = prevRoutes.map(route => {
+        const routeUpdates = updatesByRoute.get(route.id);
+        if (!routeUpdates) return route;
+        const updateMap = new Map(
+          routeUpdates.map(item => [item.addressId, item.update])
+        );
+        const updatedAddresses = route.addresses.map(addr => {
+          const update = updateMap.get(addr.id);
+          if (!update) return addr;
+          return {
+            ...addr,
+            waste: update.waste,
+            status: update.status,
+            isCollected: update.status === 'COLLECTED',
+            issueReason: update.issueReason ?? undefined,
+            issueFlags: update.issueFlags ?? [],
+            issueNote: update.issueNote ?? undefined,
+            issuePhoto: update.issuePhoto ?? undefined,
+          };
+        });
+        const collectedCount = updatedAddresses.filter(a => a.isCollected).length;
+        return {
+          ...route,
+          addresses: updatedAddresses,
+          collectedAddresses: collectedCount,
+        };
+      });
+      cacheManager.saveRoutes(nextRoutes);
+      return nextRoutes;
+    });
+
+    setSelectedRoute(prev => {
+      if (!prev) return prev;
+      const routeUpdates = updatesByRoute.get(prev.id);
+      if (!routeUpdates) return prev;
+      const updateMap = new Map(routeUpdates.map(item => [item.addressId, item.update]));
+      const updatedAddresses = prev.addresses.map(addr => {
+        const update = updateMap.get(addr.id);
+        if (!update) return addr;
+        return {
+          ...addr,
+          waste: update.waste,
+          status: update.status,
+          isCollected: update.status === 'COLLECTED',
+          issueReason: update.issueReason ?? undefined,
+          issueFlags: update.issueFlags ?? [],
+          issueNote: update.issueNote ?? undefined,
+          issuePhoto: update.issuePhoto ?? undefined,
+        };
+      });
+      return {
+        ...prev,
+        addresses: updatedAddresses,
+        collectedAddresses: updatedAddresses.filter(a => a.isCollected).length,
+      };
+    });
+  };
+
+  const scheduleFlush = () => {
+    if (flushTimerRef.current) return;
+    flushTimerRef.current = window.setTimeout(() => {
+      flushTimerRef.current = null;
+      flushAddressUpdates();
+    }, 80);
+  };
+
+  const applyAddressUpdate = (
+    routeId: string,
+    addressId: string,
+    update: {
+      waste: WasteCategory[];
+      status: AddressStatus;
+      issueReason?: AddressIssueReason;
+      issueFlags?: AddressIssueFlag[];
+      issueNote?: string;
+      issuePhoto?: string;
+    }
+  ) => {
+    const key = `${routeId}:${addressId}`;
+    pendingUpdatesRef.current.set(key, { routeId, addressId, update });
+    scheduleFlush();
   };
 
   const updateAddressCollection = async (
@@ -159,56 +374,15 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       const updatedAddress = await routesService.updateAddressCollection(routeId, addressId, waste, details);
 
       // Update local state
-      setRoutes(prevRoutes =>
-        prevRoutes.map(route => {
-          if (route.id !== routeId) return route;
-
-          const updatedAddresses = route.addresses.map(addr => {
-            if (addr.id !== addressId) return addr;
-            return {
-              ...addr,
-              waste: updatedAddress.waste ?? waste,
-              status: updatedAddress.status ?? details?.status ?? 'COLLECTED',
-              isCollected: (updatedAddress.status ?? details?.status ?? 'COLLECTED') === 'COLLECTED',
-              issueReason: updatedAddress.issueReason ?? undefined,
-              issueFlags: updatedAddress.issueFlags ?? [],
-              issueNote: updatedAddress.issueNote ?? undefined,
-              issuePhoto: updatedAddress.issuePhoto ?? undefined,
-            };
-          });
-
-          const collectedCount = updatedAddresses.filter(a => a.isCollected).length;
-
-          return {
-            ...route,
-            addresses: updatedAddresses,
-            collectedAddresses: collectedCount,
-          };
-        })
-      );
-
-      // Update selectedRoute if it's the current one
-      if (selectedRoute?.id === routeId) {
-        const updatedAddresses = selectedRoute.addresses.map(addr => {
-          if (addr.id !== addressId) return addr;
-          return {
-            ...addr,
-            waste: updatedAddress.waste ?? waste,
-            status: updatedAddress.status ?? details?.status ?? 'COLLECTED',
-            isCollected: (updatedAddress.status ?? details?.status ?? 'COLLECTED') === 'COLLECTED',
-            issueReason: updatedAddress.issueReason ?? undefined,
-            issueFlags: updatedAddress.issueFlags ?? [],
-            issueNote: updatedAddress.issueNote ?? undefined,
-            issuePhoto: updatedAddress.issuePhoto ?? undefined,
-          };
-        });
-
-        setSelectedRoute({
-          ...selectedRoute,
-          addresses: updatedAddresses,
-          collectedAddresses: updatedAddresses.filter(a => a.isCollected).length,
-        });
-      }
+      const resolvedStatus = (updatedAddress.status ?? details?.status ?? 'COLLECTED') as AddressStatus;
+      applyAddressUpdate(routeId, addressId, {
+        waste: updatedAddress.waste ?? waste,
+        status: resolvedStatus,
+        issueReason: updatedAddress.issueReason ?? details?.issueReason,
+        issueFlags: updatedAddress.issueFlags ?? details?.issueFlags,
+        issueNote: updatedAddress.issueNote ?? details?.issueNote,
+        issuePhoto: updatedAddress.issuePhoto ?? details?.issuePhoto,
+      });
 
       clearCollectionDraft(routeId, addressId);
 
@@ -217,6 +391,37 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         description: `Zapisano ${totalCount} pojemników`,
       });
     } catch (err: any) {
+      const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
+      if (APP_CONFIG.FEATURES.OFFLINE_MODE && isOffline) {
+        const resolvedStatus = (details?.status ?? 'COLLECTED') as AddressStatus;
+        applyAddressUpdate(routeId, addressId, {
+          waste,
+          status: resolvedStatus,
+          issueReason: details?.issueReason,
+          issueFlags: details?.issueFlags,
+          issueNote: details?.issueNote,
+          issuePhoto: details?.issuePhoto,
+        });
+
+        const queue = getSyncQueue();
+        queue.push({
+          type: 'UPDATE_ADDRESS',
+          routeId,
+          addressId,
+          payload: { waste, details },
+          queuedAt: new Date().toISOString(),
+        });
+        saveSyncQueue(queue);
+
+        clearCollectionDraft(routeId, addressId);
+
+        const totalCount = waste.reduce((sum, w) => sum + w.count, 0);
+        toast.success('Zapisano offline', {
+          description: `Zapisano ${totalCount} pojemników. Dane zostaną zsynchronizowane po powrocie internetu.`,
+        });
+        return;
+      }
+
       const message = err?.message || 'Nie udało się zapisać odbioru';
       toast.error('Błąd', {
         description: message,
@@ -302,6 +507,7 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     error,
     selectedRoute,
     selectedWasteTypes,
+    syncQueueCount,
     hasCollectionDraft,
     getCollectionDraft,
     saveCollectionDraft,

@@ -52,6 +52,8 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
       city?: string;
       wasteType?: string;
       active?: string;
+      composting?: string;
+      unassigned?: string;
       sortBy?: string;
       sortOrder?: string;
     };
@@ -62,6 +64,18 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
     }
     if (query.active !== undefined) {
       where.active = query.active === 'true';
+    }
+    if (query.composting) {
+      if (query.composting === 'yes') {
+        where.composting = 'Tak';
+      } else if (query.composting === 'no') {
+        where.composting = 'Nie';
+      } else if (query.composting === 'unknown') {
+        where.OR = [...(where.OR || []), { composting: null }, { composting: '' }];
+      }
+    }
+    if (query.unassigned === 'true') {
+      where.routeAddresses = { none: {} };
     }
     if (query.search) {
       const normalized = query.search
@@ -119,6 +133,141 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
       active: address.active,
       createdAt: address.createdAt.toISOString(),
     }));
+  });
+
+  app.get('/admin/addresses/:id/stats', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const address = await prisma.address.findUnique({ where: { id } });
+    if (!address) {
+      return reply.status(404).send({ message: 'Nie znaleziono adresu' });
+    }
+
+    const routeAddresses = await prisma.routeAddress.findMany({
+      where: {
+        addressId: id,
+        status: 'COLLECTED',
+      },
+      include: {
+        route: true,
+      },
+    });
+
+    const initByType = () => Object.fromEntries(WASTE_OPTIONS.map(option => [option.id, 0]));
+    const totalsByType: Record<string, number> = initByType();
+    const dailyMap = new Map<string, { date: string; totalWaste: number; collectedAddresses: number; byType: Record<string, number> }>();
+    const monthlyMap = new Map<string, { month: string; totalWaste: number; collectedAddresses: number; byType: Record<string, number> }>();
+    let totalCollections = 0;
+    let totalWaste = 0;
+
+    routeAddresses.forEach(item => {
+      const routeDate = item.route?.date || item.route?.updatedAt;
+      if (!routeDate) return;
+      const dateKey = routeDate.toISOString().split('T')[0];
+      const monthKey = dateKey.slice(0, 7);
+
+      if (!dailyMap.has(dateKey)) {
+        dailyMap.set(dateKey, {
+          date: dateKey,
+          totalWaste: 0,
+          collectedAddresses: 0,
+          byType: initByType(),
+        });
+      }
+      if (!monthlyMap.has(monthKey)) {
+        monthlyMap.set(monthKey, {
+          month: monthKey,
+          totalWaste: 0,
+          collectedAddresses: 0,
+          byType: initByType(),
+        });
+      }
+
+      const wasteList = Array.isArray(item.waste) ? item.waste : [];
+      let entryTotal = 0;
+      wasteList.forEach((waste: any) => {
+        const id = waste?.id;
+        const count = Number(waste?.count || 0);
+        if (!id) return;
+        totalsByType[id] = (totalsByType[id] || 0) + count;
+        dailyMap.get(dateKey)!.byType[id] = (dailyMap.get(dateKey)!.byType[id] || 0) + count;
+        monthlyMap.get(monthKey)!.byType[id] = (monthlyMap.get(monthKey)!.byType[id] || 0) + count;
+        entryTotal += count;
+      });
+
+      totalCollections += 1;
+      totalWaste += entryTotal;
+      dailyMap.get(dateKey)!.totalWaste += entryTotal;
+      dailyMap.get(dateKey)!.collectedAddresses += 1;
+      monthlyMap.get(monthKey)!.totalWaste += entryTotal;
+      monthlyMap.get(monthKey)!.collectedAddresses += 1;
+    });
+
+    const daily = Array.from(dailyMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+    const monthly = Array.from(monthlyMap.values()).sort((a, b) => a.month.localeCompare(b.month));
+
+    return {
+      address: {
+        id: address.id,
+        street: address.street,
+        number: address.number,
+        city: address.city,
+        postalCode: address.postalCode || undefined,
+        notes: address.notes || undefined,
+        composting: address.composting || undefined,
+        active: address.active,
+      },
+      totals: {
+        totalCollections,
+        totalWaste,
+        byType: totalsByType,
+      },
+      daily,
+      monthly,
+    };
+  });
+
+  app.get('/admin/addresses/stats-summary', async () => {
+    const initByType = () => Object.fromEntries(WASTE_OPTIONS.map(option => [option.id, 0]));
+    const addresses = await prisma.address.findMany();
+    const summaryMap = new Map(
+      addresses.map(address => [
+        address.id,
+        {
+          addressId: address.id,
+          street: address.street,
+          number: address.number,
+          city: address.city,
+          postalCode: address.postalCode || undefined,
+          totalWaste: 0,
+          byType: initByType(),
+        },
+      ])
+    );
+
+    const collected = await prisma.routeAddress.findMany({
+      where: { status: 'COLLECTED' },
+    });
+
+    collected.forEach(item => {
+      const entry = summaryMap.get(item.addressId);
+      if (!entry) return;
+      const wasteList = Array.isArray(item.waste) ? item.waste : [];
+      wasteList.forEach((waste: any) => {
+        const id = waste?.id;
+        const count = Number(waste?.count || 0);
+        if (!id) return;
+        entry.byType[id] = (entry.byType[id] || 0) + count;
+        entry.totalWaste += count;
+      });
+    });
+
+    return Array.from(summaryMap.values()).sort((a, b) => {
+      const cityDiff = a.city.localeCompare(b.city);
+      if (cityDiff !== 0) return cityDiff;
+      const streetDiff = a.street.localeCompare(b.street);
+      if (streetDiff !== 0) return streetDiff;
+      return a.number.localeCompare(b.number);
+    });
   });
 
   app.post('/admin/addresses', async (request, reply) => {

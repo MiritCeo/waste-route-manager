@@ -163,6 +163,41 @@ export interface DailyStatsRow {
   byType: Record<string, number>;
 }
 
+export interface AddressStats {
+  address: {
+    id: string;
+    street: string;
+    number: string;
+    city: string;
+    postalCode?: string;
+    notes?: string;
+    composting?: string;
+    active: boolean;
+  };
+  totals: {
+    totalCollections: number;
+    totalWaste: number;
+    byType: Record<string, number>;
+  };
+  daily: DailyStatsRow[];
+  monthly: Array<{
+    month: string;
+    totalWaste: number;
+    collectedAddresses: number;
+    byType: Record<string, number>;
+  }>;
+}
+
+export interface AddressStatsSummaryRow {
+  addressId: string;
+  street: string;
+  number: string;
+  city: string;
+  postalCode?: string;
+  totalWaste: number;
+  byType: Record<string, number>;
+}
+
 export interface DeclaredContainer {
   name: string;
   count: number;

@@ -12,6 +12,8 @@ export interface AdminAddressesQuery extends QueryParams {
   city?: string;
   wasteType?: WasteType;
   active?: boolean;
+  composting?: 'yes' | 'no' | 'unknown';
+  unassigned?: boolean;
 }
 
 export interface AdminRoutesQuery extends QueryParams {
