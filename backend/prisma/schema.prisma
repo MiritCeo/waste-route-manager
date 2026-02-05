@@ -22,6 +22,7 @@ model Address {
   updatedAt          DateTime @updatedAt
 
   routeAddresses RouteAddress[]
+  collectionLogs CollectionLog[]
 
   @@index([city])
   @@index([street])
@@ -38,6 +39,7 @@ model Route {
   assignedDriverId   String?
 
   routeAddresses RouteAddress[]
+  collectionLogs CollectionLog[]
 }
 
 model RouteAddress {
@@ -97,6 +99,7 @@ model User {
   lastLogin  DateTime?
 
   issueReports RouteAddress[] @relation("IssueReportedBy")
+  collectionLogs CollectionLog[] @relation("CollectedBy")
 }
 
 model IssueConfig {
