@@ -293,6 +293,7 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
 
     const routeAddress = await prisma.routeAddress.findFirst({
       where: { routeId, addressId },
+      include: { route: true },
     });
     if (!routeAddress) {
       return reply.status(404).send({ message: 'Nie znaleziono adresu w trasie' });
@@ -322,6 +323,19 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
       where: { id: routeId },
       data: { collectedAddresses: collectedCount },
     });
+
+    if (isCollected && !routeAddress.isCollected) {
+      await prisma.collectionLog.create({
+        data: {
+          addressId,
+          routeId,
+          collectedAt: new Date(),
+          routeDate: routeAddress.route?.date || null,
+          waste: body.waste || routeAddress.waste,
+          collectedById: reporterId || null,
+        },
+      });
+    }
 
     const address = await prisma.address.findUnique({ where: { id: addressId } });
     return {

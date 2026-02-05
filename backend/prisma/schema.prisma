@@ -65,6 +65,24 @@ model RouteAddress {
   @@index([addressId])
 }
 
+model CollectionLog {
+  id            String   @id @default(uuid())
+  addressId     String
+  routeId       String
+  collectedAt   DateTime @default(now())
+  routeDate     DateTime?
+  waste         Json
+  collectedById String?
+
+  address    Address @relation(fields: [addressId], references: [id], onDelete: Cascade)
+  route      Route   @relation(fields: [routeId], references: [id], onDelete: Cascade)
+  collectedBy User?  @relation("CollectedBy", fields: [collectedById], references: [id])
+
+  @@index([addressId])
+  @@index([routeId])
+  @@index([collectedAt])
+}
+
 model User {
   id         String   @id @default(uuid())
   employeeId String   @unique

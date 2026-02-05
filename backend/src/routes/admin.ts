@@ -142,14 +142,8 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
       return reply.status(404).send({ message: 'Nie znaleziono adresu' });
     }
 
-    const routeAddresses = await prisma.routeAddress.findMany({
-      where: {
-        addressId: id,
-        status: 'COLLECTED',
-      },
-      include: {
-        route: true,
-      },
+    const logs = await prisma.collectionLog.findMany({
+      where: { addressId: id },
     });
 
     const initByType = () => Object.fromEntries(WASTE_OPTIONS.map(option => [option.id, 0]));
@@ -159,10 +153,12 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
     let totalCollections = 0;
     let totalWaste = 0;
 
-    routeAddresses.forEach(item => {
-      const routeDate = item.route?.date || item.route?.updatedAt;
-      if (!routeDate) return;
-      const dateKey = routeDate.toISOString().split('T')[0];
+    const dailyAddressMap = new Map<string, Set<string>>();
+    const monthlyAddressMap = new Map<string, Set<string>>();
+
+    logs.forEach(item => {
+      const collectedAt = item.collectedAt;
+      const dateKey = collectedAt.toISOString().split('T')[0];
       const monthKey = dateKey.slice(0, 7);
 
       if (!dailyMap.has(dateKey)) {
@@ -197,9 +193,22 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
       totalCollections += 1;
       totalWaste += entryTotal;
       dailyMap.get(dateKey)!.totalWaste += entryTotal;
-      dailyMap.get(dateKey)!.collectedAddresses += 1;
+      if (!dailyAddressMap.has(dateKey)) {
+        dailyAddressMap.set(dateKey, new Set());
+      }
+      dailyAddressMap.get(dateKey)!.add(item.addressId);
       monthlyMap.get(monthKey)!.totalWaste += entryTotal;
-      monthlyMap.get(monthKey)!.collectedAddresses += 1;
+      if (!monthlyAddressMap.has(monthKey)) {
+        monthlyAddressMap.set(monthKey, new Set());
+      }
+      monthlyAddressMap.get(monthKey)!.add(item.addressId);
+    });
+
+    dailyMap.forEach((value, key) => {
+      value.collectedAddresses = dailyAddressMap.get(key)?.size || 0;
+    });
+    monthlyMap.forEach((value, key) => {
+      value.collectedAddresses = monthlyAddressMap.get(key)?.size || 0;
     });
 
     const daily = Array.from(dailyMap.values()).sort((a, b) => a.date.localeCompare(b.date));
@@ -244,9 +253,7 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
       ])
     );
 
-    const collected = await prisma.routeAddress.findMany({
-      where: { status: 'COLLECTED' },
-    });
+    const collected = await prisma.collectionLog.findMany();
 
     collected.forEach(item => {
       const entry = summaryMap.get(item.addressId);
@@ -826,17 +833,23 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
   app.get('/admin/daily-stats', async (request) => {
     const query = request.query as { month: string; wasteType?: string };
     const [year, month] = query.month.split('-').map(Number);
-    const prefix = `${year}-${String(month).padStart(2, '0')}`;
+    const monthStart = new Date(`${year}-${String(month).padStart(2, '0')}-01T00:00:00.000Z`);
+    const monthEnd = new Date(monthStart);
+    monthEnd.setMonth(monthEnd.getMonth() + 1);
 
-    const routes = await prisma.route.findMany({
-      where: { date: { gte: new Date(`${prefix}-01`) } },
-      include: { routeAddresses: true },
+    const logs = await prisma.collectionLog.findMany({
+      where: {
+        collectedAt: {
+          gte: monthStart,
+          lt: monthEnd,
+        },
+      },
     });
 
     const byDate: Record<string, any> = {};
-    routes.forEach(route => {
-      const date = route.date?.toISOString().split('T')[0] || `${prefix}-01`;
-      if (!date.startsWith(prefix)) return;
+    const addressSets: Record<string, Set<string>> = {};
+    logs.forEach(item => {
+      const date = item.collectedAt.toISOString().split('T')[0];
       if (!byDate[date]) {
         byDate[date] = {
           date,
@@ -844,17 +857,20 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
           collectedAddresses: 0,
           byType: Object.fromEntries(WASTE_OPTIONS.map(option => [option.id, 0])),
         };
+        addressSets[date] = new Set();
       }
-      route.routeAddresses.forEach(addr => {
-        if (addr.status !== 'COLLECTED') return;
-        const waste = Array.isArray(addr.waste) ? addr.waste : [];
-        waste.forEach((item: any) => {
-          if (query.wasteType && item.id !== query.wasteType) return;
-          byDate[date].totalWaste += item.count || 0;
-          byDate[date].byType[item.id] = (byDate[date].byType[item.id] || 0) + (item.count || 0);
-        });
-        byDate[date].collectedAddresses += 1;
+      const waste = Array.isArray(item.waste) ? item.waste : [];
+      waste.forEach((entry: any) => {
+        if (query.wasteType && entry.id !== query.wasteType) return;
+        const count = entry.count || 0;
+        byDate[date].totalWaste += count;
+        byDate[date].byType[entry.id] = (byDate[date].byType[entry.id] || 0) + count;
       });
+      addressSets[date].add(item.addressId);
+    });
+
+    Object.keys(byDate).forEach(date => {
+      byDate[date].collectedAddresses = addressSets[date]?.size || 0;
     });
 
     return Object.values(byDate).sort((a: any, b: any) => a.date.localeCompare(b.date));

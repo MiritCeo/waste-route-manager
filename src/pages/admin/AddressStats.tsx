@@ -14,6 +14,7 @@ export const AddressStats = () => {
   const navigate = useNavigate();
   const [stats, setStats] = useState<AddressStatsType | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const loadStats = async () => {
@@ -24,10 +25,12 @@ export const AddressStats = () => {
       }
       try {
         setIsLoading(true);
+        setError(null);
         const data = await adminService.getAddressStats(addressId);
         setStats(data);
       } catch (error) {
         console.error('Failed to load address stats:', error);
+        setError('Nie udało się pobrać statystyk adresu');
         toast.error('Nie udało się pobrać statystyk adresu');
       } finally {
         setIsLoading(false);
@@ -53,9 +56,21 @@ export const AddressStats = () => {
             <div className="w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
             <p className="text-sm text-muted-foreground">Ładowanie statystyk...</p>
           </div>
+        ) : error ? (
+          <div className="bg-card rounded-2xl p-6 border border-border text-sm text-muted-foreground space-y-3">
+            <p>{error}</p>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => navigate(ROUTES.ADMIN.ADDRESS_STATS_OVERVIEW)}>
+                Statystyka ogólna adresów
+              </Button>
+              <Button onClick={() => navigate(ROUTES.ADMIN.ADDRESSES)}>
+                Wróć do adresów
+              </Button>
+            </div>
+          </div>
         ) : !stats ? (
           <div className="bg-card rounded-2xl p-6 border border-border text-sm text-muted-foreground space-y-3">
-            <p>Brak wybranego adresu.</p>
+            <p>{addressId ? 'Brak danych dla wybranego adresu.' : 'Brak adresu w URL.'}</p>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => navigate(ROUTES.ADMIN.ADDRESS_STATS_OVERVIEW)}>
                 Statystyka ogólna adresów
