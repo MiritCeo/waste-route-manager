@@ -204,8 +204,9 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       cacheManager.saveRoutes(data);
     } catch (err: any) {
       const message = err?.message || 'Nie udało się pobrać tras';
+      const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
       const cached = APP_CONFIG.FEATURES.OFFLINE_MODE ? cacheManager.getRoutes<Route[]>() : null;
-      if (cached && cached.length > 0) {
+      if (isOffline && cached && cached.length > 0) {
         setRoutes(cached);
         setError(null);
         toast.success('Tryb offline', {
