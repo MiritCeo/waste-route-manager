@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback, useLayoutEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Address } from '@/types/waste';
 import { AddressCard } from '@/components/AddressCard';
@@ -188,6 +188,15 @@ export const AddressList = () => {
     return () => observer.disconnect();
   }, [filteredAddresses.length]);
 
+  useLayoutEffect(() => {
+    const target = listRef.current;
+    if (!target) return;
+    const height = target.clientHeight || window.innerHeight;
+    if (height && viewportHeight !== height) {
+      setViewportHeight(height);
+    }
+  }, [isLoading, filteredAddresses.length, viewportHeight]);
+
   useEffect(() => {
     const updateRowHeight = () => {
       const width = window.innerWidth;
@@ -237,14 +246,19 @@ export const AddressList = () => {
     );
   }
 
-  const totalHeight = filteredAddresses.length * rowHeight;
-  const startIndex = Math.max(0, Math.floor(scrollTop / rowHeight) - OVERSCAN);
-  const endIndex = Math.min(
-    filteredAddresses.length - 1,
-    Math.ceil((scrollTop + viewportHeight) / rowHeight) + OVERSCAN
-  );
+  const useVirtualization = viewportHeight > 0;
+  const totalHeight = useVirtualization ? filteredAddresses.length * rowHeight : 0;
+  const startIndex = useVirtualization
+    ? Math.max(0, Math.floor(scrollTop / rowHeight) - OVERSCAN)
+    : 0;
+  const endIndex = useVirtualization
+    ? Math.min(
+        filteredAddresses.length - 1,
+        Math.ceil((scrollTop + viewportHeight) / rowHeight) + OVERSCAN
+      )
+    : filteredAddresses.length - 1;
   const visibleItems = filteredAddresses.slice(startIndex, endIndex + 1);
-  const offsetTop = startIndex * rowHeight;
+  const offsetTop = useVirtualization ? startIndex * rowHeight : 0;
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
@@ -300,7 +314,7 @@ export const AddressList = () => {
                'Brak adresów'}
             </p>
           </div>
-        ) : (
+        ) : useVirtualization ? (
           <div style={{ height: totalHeight, position: 'relative' }}>
             <div style={{ transform: `translateY(${offsetTop}px)` }}>
               {visibleItems.map((address) => (
@@ -315,6 +329,16 @@ export const AddressList = () => {
               ))}
             </div>
           </div>
+        ) : (
+          filteredAddresses.map((address) => (
+            <div key={address.id} className="pb-2 last:pb-0">
+              <AddressCard
+                address={address}
+                hasDraft={routeId ? hasCollectionDraft(routeId, address.id) : false}
+                onSelect={handleSelectAddress}
+              />
+            </div>
+          ))
         )}
       </main>
     </div>
