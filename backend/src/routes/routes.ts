@@ -104,7 +104,7 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
   };
 
   const resetRouteIfNeeded = async (route: RouteWithAddresses): Promise<RouteWithAddresses> => {
-    if (!route.date || route.date >= startOfToday) {
+    if (route.date && route.date >= startOfToday) {
       return route;
     }
 
