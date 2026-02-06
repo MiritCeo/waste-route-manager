@@ -6,6 +6,7 @@ import { Header } from '@/components/Header';
 import { Check, MapPin, AlertTriangle, PauseCircle, Camera } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useRoutes } from '@/contexts/RouteContext';
+import { routesService } from '@/api/services/routes.service';
 import { ROUTES } from '@/constants/routes';
 import { WASTE_OPTIONS } from '@/constants/waste';
 import { toast } from 'sonner';
@@ -137,32 +138,45 @@ export const CollectionView = () => {
       return;
     }
 
-    const foundAddress = selectedRoute.addresses.find(a => a.id === addressId);
-    if (foundAddress) {
-      setAddress(foundAddress);
-      setWaste(mergeWasteForSelection(foundAddress.waste, selectedWasteTypes));
-      const initialStatus = foundAddress.status ?? (foundAddress.isCollected ? 'COLLECTED' : 'PENDING');
-      setStatus(initialStatus === 'PENDING' ? 'COLLECTED' : initialStatus);
-      setIssueReason(foundAddress.issueReason || '');
-      setIssueFlags(foundAddress.issueFlags || []);
-      setIssueNote(foundAddress.issueNote || '');
-      setIssuePhoto(foundAddress.issuePhoto);
-      setIssuePhotoFile(undefined);
-
-      if (routeId) {
-        const draft = getCollectionDraft(routeId, addressId);
-        if (draft) {
-          setWaste(mergeWasteForSelection(draft.waste, selectedWasteTypes));
-          setStatus(draft.status ?? 'COLLECTED');
-          setIssueReason(draft.issueReason || '');
-          setIssueFlags(draft.issueFlags || []);
-          setIssueNote(draft.issueNote || '');
-          setIssuePhoto(draft.issuePhoto);
-          setIssuePhotoFile(undefined);
+    const fallback = selectedRoute.addresses.find(a => a.id === addressId);
+    const loadDetails = async () => {
+      try {
+        if (!routeId || !addressId) return;
+        const detailed = await routesService.getRouteAddress(routeId, addressId);
+        setAddress(detailed);
+        setWaste(mergeWasteForSelection(detailed.waste, selectedWasteTypes));
+        const initialStatus = detailed.status ?? (detailed.isCollected ? 'COLLECTED' : 'PENDING');
+        setStatus(initialStatus === 'PENDING' ? 'COLLECTED' : initialStatus);
+        setIssueReason(detailed.issueReason || '');
+        setIssueFlags(detailed.issueFlags || []);
+        setIssueNote(detailed.issueNote || '');
+        setIssuePhoto(detailed.issuePhoto);
+        setIssuePhotoFile(undefined);
+      } catch (error) {
+        if (!fallback) {
+          navigate(`/driver/route/${routeId}`);
+          return;
         }
+        setAddress(fallback);
+        setWaste(mergeWasteForSelection(fallback.waste ?? [], selectedWasteTypes));
+        const initialStatus = fallback.status ?? (fallback.isCollected ? 'COLLECTED' : 'PENDING');
+        setStatus(initialStatus === 'PENDING' ? 'COLLECTED' : initialStatus);
       }
-    } else {
-      navigate(`/driver/route/${routeId}`);
+    };
+
+    loadDetails();
+
+    if (routeId) {
+      const draft = getCollectionDraft(routeId, addressId);
+      if (draft) {
+        setWaste(mergeWasteForSelection(draft.waste, selectedWasteTypes));
+        setStatus(draft.status ?? 'COLLECTED');
+        setIssueReason(draft.issueReason || '');
+        setIssueFlags(draft.issueFlags || []);
+        setIssueNote(draft.issueNote || '');
+        setIssuePhoto(draft.issuePhoto);
+        setIssuePhotoFile(undefined);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addressId, selectedWasteTypes]); // Keep waste list aligned with selection

@@ -105,6 +105,7 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     setSyncQueueCount(getSyncQueue().length);
   };
 
+
   const processSyncQueue = async () => {
     if (!isAuthenticated) return;
     if (typeof navigator !== 'undefined' && !navigator.onLine) return;
@@ -199,9 +200,9 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       setIsLoading(true);
       setError(null);
 
-      const data = await routesService.getRoutes();
+      const data = await routesService.getRoutes({ summary: true });
       setRoutes(data);
-      cacheManager.saveRoutes(data);
+      cacheManager.saveRoutes(sanitizeRoutesForCache(data));
     } catch (err: any) {
       const message = err?.message || 'Nie udało się pobrać tras';
       const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
@@ -225,7 +226,7 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   const getRouteById = async (
     id: string,
-    options?: { force?: boolean }
+    options?: { force?: boolean; summary?: boolean }
   ): Promise<Route | undefined> => {
     try {
       if (!options?.force) {
@@ -237,7 +238,7 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       }
 
       // Otherwise fetch from API
-      const route = await routesService.getRouteById(id);
+      const route = await routesService.getRouteById(id, { summary: options?.summary });
       return route;
     } catch (err: any) {
       const message = err?.message || 'Nie udało się pobrać trasy';
@@ -261,7 +262,7 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       setRoutes(prev =>
         {
           const nextRoutes = prev.map(route => (route.id === routeId ? updatedRoute : route));
-          cacheManager.saveRoutes(nextRoutes);
+          cacheManager.saveRoutes(sanitizeRoutesForCache(nextRoutes));
           return nextRoutes;
         }
       );
@@ -314,7 +315,7 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           collectedAddresses: collectedCount,
         };
       });
-      cacheManager.saveRoutes(nextRoutes);
+      cacheManager.saveRoutes(sanitizeRoutesForCache(nextRoutes));
       return nextRoutes;
     });
 
@@ -436,6 +437,21 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       throw err;
     }
   };
+
+  const sanitizeRoutesForCache = (input: Route[]) =>
+    input.map(route => ({
+      ...route,
+      addresses: route.addresses.map(address => ({
+        id: address.id,
+        street: address.street,
+        number: address.number,
+        city: address.city,
+        isCollected: address.isCollected,
+        status: address.status,
+        waste: address.waste,
+        ownerName: address.ownerName,
+      })),
+    }));
 
   const getDraftsMap = () =>
     storage.get<Record<string, CollectionDraft>>(APP_CONFIG.STORAGE.COLLECTION_DRAFTS_KEY, {}) || {};

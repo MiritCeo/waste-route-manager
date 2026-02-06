@@ -4,12 +4,16 @@ import { QueryParams } from '@/types/api';
 import { RouteFormData } from '@/types/admin';
 
 class RoutesService {
-  async getRoutes(params?: QueryParams): Promise<Route[]> {
+  async getRoutes(params?: QueryParams & { summary?: boolean }): Promise<Route[]> {
     return apiClient.get<Route[]>('/routes', params);
   }
 
-  async getRouteById(id: string): Promise<Route> {
-    return apiClient.get<Route>(`/routes/${id}`);
+  async getRouteById(id: string, params?: { summary?: boolean }): Promise<Route> {
+    return apiClient.get<Route>(`/routes/${id}`, params);
+  }
+
+  async getRouteAddress(routeId: string, addressId: string): Promise<Address> {
+    return apiClient.get<Address>(`/routes/${routeId}/addresses/${addressId}`);
   }
 
   async createRoute(data: RouteFormData): Promise<Route> {

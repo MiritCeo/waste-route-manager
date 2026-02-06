@@ -159,7 +159,9 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
     };
   };
 
-  app.get('/routes', { preHandler: [app.authenticate] }, async () => {
+  app.get('/routes', { preHandler: [app.authenticate] }, async (request) => {
+    const query = request.query as { summary?: string };
+    const isSummary = query?.summary === 'true';
     const routes = await prisma.route.findMany({
       where: { publicationStatus: 'PUBLISHED' },
       include: {
@@ -179,21 +181,27 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
       updatedAt: route.updatedAt.toISOString(),
       totalAddresses: route.totalAddresses,
       collectedAddresses: route.collectedAddresses,
-      addresses: route.routeAddresses.map((item: RouteWithAddresses['routeAddresses'][number]) => ({
-        id: item.address.id,
-        street: item.address.street,
-        number: item.address.number,
-        city: item.address.city,
-        isCollected: item.isCollected,
-        status: item.status,
-        waste: buildWasteList(item.address, item.waste),
-        issueReason: item.issueReason || undefined,
-        issueFlags: (item.issueFlags as string[]) || [],
-        issueNote: item.issueNote || undefined,
-        issuePhoto: item.issuePhoto || undefined,
-        issueReportedAt: item.issueReportedAt?.toISOString(),
-        ownerName: extractOwnerFromNotes(item.address.notes),
-      })),
+      addresses: route.routeAddresses.map((item: RouteWithAddresses['routeAddresses'][number]) => {
+        const base = {
+          id: item.address.id,
+          street: item.address.street,
+          number: item.address.number,
+          city: item.address.city,
+          isCollected: item.isCollected,
+          status: item.status,
+          ownerName: extractOwnerFromNotes(item.address.notes),
+        };
+        if (isSummary) return base;
+        return {
+          ...base,
+          waste: buildWasteList(item.address, item.waste),
+          issueReason: item.issueReason || undefined,
+          issueFlags: (item.issueFlags as string[]) || [],
+          issueNote: item.issueNote || undefined,
+          issuePhoto: item.issuePhoto || undefined,
+          issueReportedAt: item.issueReportedAt?.toISOString(),
+        };
+      }),
     }));
   });
 
@@ -221,6 +229,8 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
 
   app.get('/routes/:id', { preHandler: [app.authenticate] }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    const query = request.query as { summary?: string };
+    const isSummary = query?.summary === 'true';
     let route = await prisma.route.findFirst({
       where: { id, publicationStatus: 'PUBLISHED' },
       include: {
@@ -243,21 +253,53 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
       updatedAt: route.updatedAt.toISOString(),
       totalAddresses: route.totalAddresses,
       collectedAddresses: route.collectedAddresses,
-      addresses: route.routeAddresses.map((item: RouteWithAddresses['routeAddresses'][number]) => ({
-        id: item.address.id,
-        street: item.address.street,
-        number: item.address.number,
-        city: item.address.city,
-        isCollected: item.isCollected,
-        status: item.status,
-        waste: buildWasteList(item.address, item.waste),
-        issueReason: item.issueReason || undefined,
-        issueFlags: (item.issueFlags as string[]) || [],
-        issueNote: item.issueNote || undefined,
-        issuePhoto: item.issuePhoto || undefined,
-        issueReportedAt: item.issueReportedAt?.toISOString(),
-        ownerName: extractOwnerFromNotes(item.address.notes),
-      })),
+      addresses: route.routeAddresses.map((item: RouteWithAddresses['routeAddresses'][number]) => {
+        const base = {
+          id: item.address.id,
+          street: item.address.street,
+          number: item.address.number,
+          city: item.address.city,
+          isCollected: item.isCollected,
+          status: item.status,
+          ownerName: extractOwnerFromNotes(item.address.notes),
+        };
+        if (isSummary) return base;
+        return {
+          ...base,
+          waste: buildWasteList(item.address, item.waste),
+          issueReason: item.issueReason || undefined,
+          issueFlags: (item.issueFlags as string[]) || [],
+          issueNote: item.issueNote || undefined,
+          issuePhoto: item.issuePhoto || undefined,
+          issueReportedAt: item.issueReportedAt?.toISOString(),
+        };
+      }),
+    };
+  });
+
+  app.get('/routes/:routeId/addresses/:addressId', { preHandler: [app.authenticate] }, async (request, reply) => {
+    const { routeId, addressId } = request.params as { routeId: string; addressId: string };
+    const routeAddress = await prisma.routeAddress.findFirst({
+      where: { routeId, addressId },
+      include: { address: true },
+    });
+    if (!routeAddress) {
+      return reply.status(404).send({ message: 'Nie znaleziono adresu w trasie' });
+    }
+    return {
+      id: routeAddress.address.id,
+      street: routeAddress.address.street,
+      number: routeAddress.address.number,
+      city: routeAddress.address.city,
+      isCollected: routeAddress.isCollected,
+      status: routeAddress.status,
+      waste: buildWasteList(routeAddress.address, routeAddress.waste),
+      issueReason: routeAddress.issueReason || undefined,
+      issueFlags: (routeAddress.issueFlags as string[]) || [],
+      issueNote: routeAddress.issueNote || undefined,
+      issuePhoto: routeAddress.issuePhoto || undefined,
+      issueReportedAt: routeAddress.issueReportedAt?.toISOString(),
+      ownerName: extractOwnerFromNotes(routeAddress.address.notes),
     };
   });
 

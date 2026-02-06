@@ -127,7 +127,7 @@ export const AddressList = () => {
       if (route) {
         setSelectedRoute(route);
         if (route.totalAddresses > route.addresses.length) {
-          const refreshed = await getRouteById(routeId, { force: true });
+          const refreshed = await getRouteById(routeId, { force: true, summary: true });
           if (refreshed) {
             setSelectedRoute(refreshed);
           }
@@ -137,7 +137,7 @@ export const AddressList = () => {
       }
 
       // Otherwise fetch from API
-      const fetchedRoute = await getRouteById(routeId, { force: true });
+      const fetchedRoute = await getRouteById(routeId, { force: true, summary: true });
       if (fetchedRoute) {
         setSelectedRoute(fetchedRoute);
       } else {
