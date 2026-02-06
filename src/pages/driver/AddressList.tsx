@@ -125,12 +125,18 @@ export const AddressList = () => {
       const route = routes.find(r => r.id === routeId);
       if (route) {
         setSelectedRoute(route);
+        if (route.totalAddresses > route.addresses.length) {
+          const refreshed = await getRouteById(routeId, { force: true });
+          if (refreshed) {
+            setSelectedRoute(refreshed);
+          }
+        }
         setIsLoading(false);
         return;
       }
 
       // Otherwise fetch from API
-      const fetchedRoute = await getRouteById(routeId);
+      const fetchedRoute = await getRouteById(routeId, { force: true });
       if (fetchedRoute) {
         setSelectedRoute(fetchedRoute);
       } else {

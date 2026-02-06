@@ -26,7 +26,7 @@ interface RouteContextType {
   saveCollectionDraft: (draft: CollectionDraft) => void;
   clearCollectionDraft: (routeId: string, addressId: string) => void;
   fetchRoutes: () => Promise<void>;
-  getRouteById: (id: string) => Promise<Route | undefined>;
+  getRouteById: (id: string, options?: { force?: boolean }) => Promise<Route | undefined>;
   updateAddressCollection: (
     routeId: string,
     addressId: string,
@@ -223,12 +223,17 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
-  const getRouteById = async (id: string): Promise<Route | undefined> => {
+  const getRouteById = async (
+    id: string,
+    options?: { force?: boolean }
+  ): Promise<Route | undefined> => {
     try {
-      // First check if we have it in state
-      const existingRoute = routes.find(r => r.id === id);
-      if (existingRoute) {
-        return existingRoute;
+      if (!options?.force) {
+        // First check if we have it in state
+        const existingRoute = routes.find(r => r.id === id);
+        if (existingRoute) {
+          return existingRoute;
+        }
       }
 
       // Otherwise fetch from API
