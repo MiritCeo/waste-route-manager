@@ -215,7 +215,7 @@ export const CollectionView = () => {
       });
       // Navigate back after successful save
       setTimeout(() => {
-        navigate(`/driver/route/${routeId}`);
+        navigate(`/driver/route/${routeId}`, { state: { resetFilter: true } });
       }, 500);
     } catch (error) {
       setIsDraftLocked(false);

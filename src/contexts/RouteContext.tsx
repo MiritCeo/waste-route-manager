@@ -241,9 +241,10 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       return route;
     } catch (err: any) {
       const message = err?.message || 'Nie udało się pobrać trasy';
+      const isOffline = typeof navigator !== 'undefined' && !navigator.onLine;
       const cached = APP_CONFIG.FEATURES.OFFLINE_MODE ? cacheManager.getRoutes<Route[]>() : null;
       const cachedRoute = cached?.find(route => route.id === id);
-      if (cachedRoute) {
+      if (isOffline && cachedRoute) {
         return cachedRoute;
       }
       toast.error('Błąd', {

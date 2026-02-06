@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { Address } from '@/types/waste';
 import { AddressCard } from '@/components/AddressCard';
 import { ProgressBar } from '@/components/ProgressBar';
@@ -15,6 +15,7 @@ import { CloudOff } from 'lucide-react';
 export const AddressList = () => {
   const { routeId } = useParams<{ routeId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const {
     routes,
     selectedRoute,
@@ -151,6 +152,13 @@ export const AddressList = () => {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [routeId]); // Only re-run when routeId changes
+
+  useEffect(() => {
+    if (location.state && (location.state as { resetFilter?: boolean }).resetFilter) {
+      setFilter('all');
+      navigate(location.pathname, { replace: true, state: {} });
+    }
+  }, [location, navigate]);
 
   useEffect(() => {
     if (!scrollStorageKey) return;
