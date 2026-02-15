@@ -29,6 +29,10 @@ export const AddressList = () => {
   const [isLoading, setIsLoading] = useState(true);
   const listRef = useRef<HTMLDivElement | null>(null);
   const rafRef = useRef<number | null>(null);
+  const isRestoringRef = useRef(false);
+  const pendingRestoreIdRef = useRef<string | null>(null);
+  const [restoreTargetId, setRestoreTargetId] = useState<string | null>(null);
+  const restoreHandledRef = useRef(false);
   const [viewportHeight, setViewportHeight] = useState(0);
   const [scrollTop, setScrollTop] = useState(0);
 
@@ -39,6 +43,26 @@ export const AddressList = () => {
     if (!routeId) return '';
     return `driver.route.scroll.${routeId}.${filter}`;
   }, [routeId, filter]);
+
+  const filterStorageKey = useMemo(() => {
+    if (!routeId) return '';
+    return `driver.route.filter.${routeId}`;
+  }, [routeId]);
+
+  const returnStorageKey = useMemo(() => {
+    if (!routeId) return '';
+    return `driver.route.return.${routeId}`;
+  }, [routeId]);
+
+  const lastAddressKey = useMemo(() => {
+    if (!routeId) return '';
+    return `driver.route.lastAddress.${routeId}`;
+  }, [routeId]);
+
+  const desiredScrollKey = useMemo(() => {
+    if (!routeId) return '';
+    return `driver.route.desiredScroll.${routeId}`;
+  }, [routeId]);
 
   // Calculate counts - MUST be before any conditional returns
   const counts = useMemo(() => {
@@ -81,6 +105,7 @@ export const AddressList = () => {
   }, [selectedRoute, filter]);
 
   const handleScroll = useCallback(() => {
+    if (isRestoringRef.current) return;
     const current = listRef.current;
     if (!current) return;
     const top = current.scrollTop;
@@ -161,16 +186,107 @@ export const AddressList = () => {
   }, [location, navigate]);
 
   useEffect(() => {
-    if (!scrollStorageKey) return;
-    const stored = sessionStorage.getItem(scrollStorageKey);
+    if (!location.state) return;
+    const state = location.state as { restoreAddressId?: string };
+    if (!state.restoreAddressId) return;
+    pendingRestoreIdRef.current = state.restoreAddressId;
+    setRestoreTargetId(state.restoreAddressId);
+    restoreHandledRef.current = false;
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location, navigate]);
+
+  useEffect(() => {
+    if (!filterStorageKey) return;
+    const stored = sessionStorage.getItem(filterStorageKey);
     if (!stored) return;
-    const target = listRef.current;
-    if (!target) return;
-    const value = Number(stored);
-    if (Number.isNaN(value)) return;
-    target.scrollTop = value;
-    setScrollTop(value);
-  }, [scrollStorageKey, filteredAddresses.length]);
+    const allowed: FilterType[] = ['all', 'pending', 'collected', 'deferred', 'issues'];
+    if (allowed.includes(stored as FilterType)) {
+      setFilter(stored as FilterType);
+    }
+  }, [filterStorageKey]);
+
+  useEffect(() => {
+    if (!filterStorageKey) return;
+    sessionStorage.setItem(filterStorageKey, filter);
+  }, [filterStorageKey, filter]);
+
+  useLayoutEffect(() => {
+    if (!scrollStorageKey) return;
+    isRestoringRef.current = true;
+
+    const getDesiredScroll = () => {
+      if (pendingRestoreIdRef.current) {
+        const pendingId = pendingRestoreIdRef.current;
+        const index = filteredAddresses.findIndex(item => item.id === pendingId);
+        if (index !== -1) {
+          pendingRestoreIdRef.current = null;
+          return index * rowHeight;
+        }
+      }
+      if (desiredScrollKey) {
+        const desiredRaw = sessionStorage.getItem(desiredScrollKey);
+        if (desiredRaw) {
+          const desiredValue = Number(desiredRaw);
+          if (!Number.isNaN(desiredValue)) {
+            sessionStorage.removeItem(desiredScrollKey);
+            return desiredValue;
+          }
+        }
+      }
+      const shouldReturn = returnStorageKey && sessionStorage.getItem(returnStorageKey);
+      if (shouldReturn && lastAddressKey) {
+        const lastAddressId = sessionStorage.getItem(lastAddressKey);
+        if (lastAddressId) {
+          const index = filteredAddresses.findIndex(item => item.id === lastAddressId);
+          if (index !== -1) {
+            return index * rowHeight;
+          }
+        }
+        sessionStorage.removeItem(returnStorageKey);
+      }
+
+      const stored = sessionStorage.getItem(scrollStorageKey);
+      if (!stored) return null;
+      const value = Number(stored);
+      if (Number.isNaN(value)) return null;
+      return value;
+    };
+
+    const desired = getDesiredScroll();
+    if (desired === null) {
+      isRestoringRef.current = false;
+      return;
+    }
+
+    let attempts = 0;
+    const tryRestore = () => {
+      const target = listRef.current;
+      if (!target) return;
+
+      // Wait until layout is ready (scrollHeight reflects full list)
+      if (target.scrollHeight <= target.clientHeight && attempts < 8) {
+        attempts += 1;
+        setTimeout(tryRestore, 60);
+        return;
+      }
+
+      const maxScroll = Math.max(0, target.scrollHeight - target.clientHeight);
+      const clamped = Math.min(Math.max(desired, 0), maxScroll);
+      isRestoringRef.current = true;
+      target.scrollTop = clamped;
+      setScrollTop(clamped);
+      requestAnimationFrame(() => {
+        if (target.scrollTop !== clamped && attempts < 8) {
+          attempts += 1;
+          setTimeout(tryRestore, 60);
+          return;
+        }
+        isRestoringRef.current = false;
+      });
+    };
+
+    tryRestore();
+  }, [scrollStorageKey, returnStorageKey, lastAddressKey, filteredAddresses, rowHeight, viewportHeight]);
 
   useEffect(() => {
     const target = listRef.current;
@@ -228,9 +344,21 @@ export const AddressList = () => {
   const handleSelectAddress = useCallback(
     (addressId: string) => {
       saveScrollPosition();
+      if (lastAddressKey) {
+        sessionStorage.setItem(lastAddressKey, addressId);
+      }
+      if (desiredScrollKey) {
+        const index = filteredAddresses.findIndex(item => item.id === addressId);
+        if (index !== -1) {
+          sessionStorage.setItem(desiredScrollKey, String(index * rowHeight));
+        }
+      }
+      if (returnStorageKey) {
+        sessionStorage.setItem(returnStorageKey, '1');
+      }
       navigate(`/driver/collect/${routeId}/${addressId}`);
     },
-    [navigate, routeId, saveScrollPosition]
+    [navigate, routeId, saveScrollPosition, lastAddressKey, returnStorageKey, desiredScrollKey, filteredAddresses, rowHeight]
   );
 
 
@@ -246,7 +374,7 @@ export const AddressList = () => {
     );
   }
 
-  const useVirtualization = viewportHeight > 0;
+  const useVirtualization = viewportHeight > 0 && !restoreTargetId;
   const totalHeight = useVirtualization ? filteredAddresses.length * rowHeight : 0;
   const startIndex = useVirtualization
     ? Math.max(0, Math.floor(scrollTop / rowHeight) - OVERSCAN)
@@ -331,7 +459,17 @@ export const AddressList = () => {
           </div>
         ) : (
           filteredAddresses.map((address) => (
-            <div key={address.id} className="pb-2 last:pb-0">
+            <div
+              key={address.id}
+              className="pb-2 last:pb-0"
+              ref={(el) => {
+                if (!el || !restoreTargetId || restoreHandledRef.current) return;
+                if (address.id !== restoreTargetId) return;
+                restoreHandledRef.current = true;
+                el.scrollIntoView({ block: 'center', behavior: 'auto' });
+                requestAnimationFrame(() => setRestoreTargetId(null));
+              }}
+            >
               <AddressCard
                 address={address}
                 hasDraft={routeId ? hasCollectionDraft(routeId, address.id) : false}

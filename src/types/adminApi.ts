@@ -10,10 +10,24 @@ export interface AdminEmployeesQuery extends QueryParams {
 
 export interface AdminAddressesQuery extends QueryParams {
   city?: string;
-  wasteType?: WasteType;
+  wasteTypes?: string;
+  street?: string;
   active?: boolean;
   composting?: 'yes' | 'no' | 'unknown';
   unassigned?: boolean;
+  routeCount?: number;
+  declarationStatus?: 'with' | 'without' | 'multi';
+  dataStatus?: string;
+  wasteGroups?: string;
+  ownerType?: 'company_with_owner' | 'company_without_owner' | 'residential';
+  numberFrom?: number;
+  numberTo?: number;
+  createdFrom?: string;
+  createdTo?: string;
+  updatedFrom?: string;
+  updatedTo?: string;
+  importedFrom?: string;
+  importedTo?: string;
 }
 
 export interface AdminRoutesQuery extends QueryParams {

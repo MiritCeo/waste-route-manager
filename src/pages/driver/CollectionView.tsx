@@ -229,7 +229,7 @@ export const CollectionView = () => {
       });
       // Navigate back after successful save
       setTimeout(() => {
-        navigate(`/driver/route/${routeId}`, { state: { resetFilter: true } });
+        navigate(`/driver/route/${routeId}`, { state: { restoreAddressId: addressId } });
       }, 500);
     } catch (error) {
       setIsDraftLocked(false);

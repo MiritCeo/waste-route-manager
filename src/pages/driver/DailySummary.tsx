@@ -47,7 +47,7 @@ export const DailySummary = () => {
         const isCollected = address.status ? address.status === 'COLLECTED' : address.isCollected;
         if (isCollected) {
           collectedAddresses++;
-          address.waste.forEach(waste => {
+          (address.waste ?? []).forEach(waste => {
             if (!wasteMap[waste.id]) {
               wasteMap[waste.id] = {
                 id: waste.id,

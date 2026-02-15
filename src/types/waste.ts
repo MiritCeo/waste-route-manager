@@ -37,7 +37,7 @@ export interface Address {
   number: string;
   city: string;
   isCollected: boolean;
-  waste: WasteCategory[];
+  waste?: WasteCategory[];
   status?: AddressStatus;
   issueReason?: AddressIssueReason;
   issueFlags?: AddressIssueFlag[];

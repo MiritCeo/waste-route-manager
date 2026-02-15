@@ -8,9 +8,57 @@ import { DEFAULT_ISSUE_CONFIG } from '../utils/issueConfig.js';
 const normalizeText = (value?: string) =>
   (value || '')
     .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
     .replace(/[,.]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+
+const expandStreetAbbreviations = (value: string) =>
+  value
+    .replace(/\b(ul|ulica)\b/g, 'ulica')
+    .replace(/\b(pl|plac)\b/g, 'plac')
+    .replace(/\b(al|aleja|aleje)\b/g, 'aleja')
+    .replace(/\b(os|osiedle)\b/g, 'osiedle');
+
+const normalizeAddressSearch = (value?: string) => {
+  if (!value) return '';
+  const normalized = normalizeText(value);
+  const withAbbrev = expandStreetAbbreviations(normalized);
+  return withAbbrev
+    .replace(/(\d)([a-z])/g, '$1 $2')
+    .replace(/\s+/g, ' ')
+    .trim();
+};
+
+const tokenizeSearch = (value?: string) =>
+  normalizeAddressSearch(value)
+    .split(' ')
+    .filter(Boolean);
+
+const levenshtein = (a: string, b: string) => {
+  if (a === b) return 0;
+  const dp = Array.from({ length: a.length + 1 }, () => new Array(b.length + 1).fill(0));
+  for (let i = 0; i <= a.length; i += 1) dp[i][0] = i;
+  for (let j = 0; j <= b.length; j += 1) dp[0][j] = j;
+  for (let i = 1; i <= a.length; i += 1) {
+    for (let j = 1; j <= b.length; j += 1) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      dp[i][j] = Math.min(
+        dp[i - 1][j] + 1,
+        dp[i][j - 1] + 1,
+        dp[i - 1][j - 1] + cost
+      );
+    }
+  }
+  return dp[a.length][b.length];
+};
+
+const fuzzyTokenMatch = (token: string, haystackWords: string[]) => {
+  if (token.length < 4) return false;
+  const tolerance = token.length >= 7 ? 2 : 1;
+  return haystackWords.some(word => levenshtein(token, word) <= tolerance);
+};
 
 const buildAddressKey = (data: {
   street: string;
@@ -30,6 +78,31 @@ const extractOwnerFromNotes = (notes?: string | null) => {
   const line = notes.split('\n').find(item => item.startsWith('Właściciel:'));
   if (!line) return '';
   return line.replace('Właściciel:', '').toLowerCase().trim();
+};
+
+const isCompanyFromNotes = (notes?: string | null) =>
+  Boolean(notes?.includes('Typ: Firma') || notes?.includes('Właściciel:'));
+
+const hasDeclarationFromNotes = (notes?: string | null) =>
+  Boolean(notes?.includes('Numer deklaracji:'));
+
+const parseDateParam = (value?: string) => {
+  if (!value) return undefined;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? undefined : date;
+};
+
+const endOfDay = (date: Date) => {
+  const copy = new Date(date);
+  copy.setHours(23, 59, 59, 999);
+  return copy;
+};
+
+const parseAddressNumber = (value?: string) => {
+  if (!value) return null;
+  const match = value.trim().match(/^(\d+)/);
+  if (!match) return null;
+  return Number(match[1]);
 };
 
 const buildImportKey = (data: {
@@ -52,9 +125,24 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
       search?: string;
       city?: string;
       wasteType?: string;
+      wasteTypes?: string;
+      street?: string;
       active?: string;
       composting?: string;
       unassigned?: string;
+      routeCount?: string;
+      declarationStatus?: string;
+      dataStatus?: string;
+      wasteGroups?: string;
+      ownerType?: string;
+      numberFrom?: string;
+      numberTo?: string;
+      createdFrom?: string;
+      createdTo?: string;
+      updatedFrom?: string;
+      updatedTo?: string;
+      importedFrom?: string;
+      importedTo?: string;
       sortBy?: string;
       sortOrder?: string;
     };
@@ -62,6 +150,9 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
     const where: any = {};
     if (query.city) {
       where.city = query.city;
+    }
+    if (query.street) {
+      where.street = query.street;
     }
     if (query.active !== undefined) {
       where.active = query.active === 'true';
@@ -79,31 +170,163 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
       where.routeAddresses = { none: {} };
     }
     if (query.search) {
-      const normalized = query.search
-        .replace(/[,.]/g, ' ')
-        .replace(/\s+/g, ' ')
-        .trim();
-      const tokens = normalized.split(' ').filter(Boolean);
-      if (tokens.length > 0) {
-        where.AND = tokens.map(token => ({
-          OR: [
-            { street: { contains: token } },
-            { city: { contains: token } },
-            { number: { contains: token } },
-            { postalCode: { contains: token } },
-          ],
-        }));
+      // We'll apply advanced matching after fetch (normalization + fuzzy).
+    }
+
+    const createdFrom = parseDateParam(query.createdFrom);
+    const createdTo = parseDateParam(query.createdTo);
+    if (createdFrom || createdTo) {
+      where.createdAt = {
+        ...(createdFrom ? { gte: createdFrom } : {}),
+        ...(createdTo ? { lte: endOfDay(createdTo) } : {}),
+      };
+    }
+
+    const updatedFrom = parseDateParam(query.updatedFrom);
+    const updatedTo = parseDateParam(query.updatedTo);
+    if (updatedFrom || updatedTo) {
+      where.updatedAt = {
+        ...(updatedFrom ? { gte: updatedFrom } : {}),
+        ...(updatedTo ? { lte: endOfDay(updatedTo) } : {}),
+      };
+    }
+
+    const importedFrom = parseDateParam(query.importedFrom);
+    const importedTo = parseDateParam(query.importedTo);
+    if (importedFrom || importedTo) {
+      where.importedAt = {
+        ...(importedFrom ? { gte: importedFrom } : {}),
+        ...(importedTo ? { lte: endOfDay(importedTo) } : {}),
+      };
+    }
+
+    let addresses = await prisma.address.findMany({
+      where,
+      include: { _count: { select: { routeAddresses: true } } },
+    });
+
+    const wasteTypesParam = query.wasteTypes || query.wasteType;
+    if (wasteTypesParam) {
+      const wasteTypes = wasteTypesParam.split(',').map(item => item.trim()).filter(Boolean);
+      if (wasteTypes.length > 0) {
+        addresses = addresses.filter(address => {
+          if (!Array.isArray(address.wasteTypes)) return false;
+          const addressWaste = address.wasteTypes as string[];
+          return wasteTypes.some(type => addressWaste.includes(type));
+        });
       }
     }
 
-    let addresses = await prisma.address.findMany({ where });
-
-    if (query.wasteType) {
-      const wasteType = query.wasteType;
+    const wasteGroups = query.wasteGroups?.split(',').map(item => item.trim()).filter(Boolean) || [];
+    if (wasteGroups.length > 0) {
       addresses = addresses.filter(address => {
         if (!Array.isArray(address.wasteTypes)) return false;
-        return (address.wasteTypes as string[]).includes(wasteType);
+        const types = address.wasteTypes as string[];
+        return wasteGroups.some(group => {
+          if (group === 'bio') return types.some(type => type.startsWith('bio-'));
+          if (group === 'glass') return types.some(type => type.startsWith('glass-'));
+          if (group === 'ash') return types.includes('ash');
+          if (group === 'mixed') return types.some(type => type.startsWith('mixed'));
+          if (group === 'paper') return types.some(type => type.startsWith('paper'));
+          if (group === 'plastic') return types.some(type => type.startsWith('plastic'));
+          return false;
+        });
       });
+    }
+
+    if (query.ownerType) {
+      addresses = addresses.filter(address => {
+        const isCompany = isCompanyFromNotes(address.notes);
+        const owner = extractOwnerFromNotes(address.notes);
+        if (query.ownerType === 'company_with_owner') return isCompany && Boolean(owner);
+        if (query.ownerType === 'company_without_owner') return isCompany && !owner;
+        if (query.ownerType === 'residential') return !isCompany;
+        return true;
+      });
+    }
+
+    if (query.declarationStatus) {
+      const declarationStatus = query.declarationStatus;
+      const addressKeyCounts = new Map<string, number>();
+      addresses.forEach(address => {
+        const baseKey = buildAddressKey({
+          street: address.street,
+          number: address.number,
+          city: address.city,
+          postalCode: address.postalCode,
+        });
+        addressKeyCounts.set(baseKey, (addressKeyCounts.get(baseKey) || 0) + 1);
+      });
+      addresses = addresses.filter(address => {
+        const hasDeclaration = hasDeclarationFromNotes(address.notes);
+        const baseKey = buildAddressKey({
+          street: address.street,
+          number: address.number,
+          city: address.city,
+          postalCode: address.postalCode,
+        });
+        const isMulti = (addressKeyCounts.get(baseKey) || 0) > 1;
+        if (declarationStatus === 'with') return hasDeclaration;
+        if (declarationStatus === 'without') return !hasDeclaration;
+        if (declarationStatus === 'multi') return isMulti;
+        return true;
+      });
+    }
+
+    const dataStatus = query.dataStatus?.split(',').map(item => item.trim()).filter(Boolean) || [];
+    if (dataStatus.length > 0) {
+      addresses = addresses.filter(address => {
+        const missingNumber = !address.number || address.number.trim().length === 0;
+        const missingPostal = !address.postalCode || address.postalCode.trim().length === 0;
+        const missingComposting = !address.composting || address.composting.trim().length === 0;
+        const suspicious =
+          !address.street || address.street.trim().length < 2 ||
+          !address.city || address.city.trim().length < 2 ||
+          missingNumber ||
+          !/\d/.test(address.number || '');
+        return dataStatus.some(status => {
+          if (status === 'missing_number') return missingNumber;
+          if (status === 'missing_postal') return missingPostal;
+          if (status === 'missing_composting') return missingComposting;
+          if (status === 'suspicious') return suspicious;
+          return false;
+        });
+      });
+    }
+
+    if (query.routeCount !== undefined && query.routeCount !== '') {
+      const expected = Number(query.routeCount);
+      if (!Number.isNaN(expected)) {
+        addresses = addresses.filter(address => address._count?.routeAddresses === expected);
+      }
+    }
+
+    const numberFrom = query.numberFrom ? Number(query.numberFrom) : undefined;
+    const numberTo = query.numberTo ? Number(query.numberTo) : undefined;
+    if (numberFrom !== undefined || numberTo !== undefined) {
+      addresses = addresses.filter(address => {
+        const value = parseAddressNumber(address.number);
+        if (value === null) return false;
+        if (numberFrom !== undefined && value < numberFrom) return false;
+        if (numberTo !== undefined && value > numberTo) return false;
+        return true;
+      });
+    }
+
+    if (query.search) {
+      const tokens = tokenizeSearch(query.search);
+      if (tokens.length > 0) {
+        addresses = addresses.filter(address => {
+          const addressLine = normalizeAddressSearch(
+            `${address.city} ${address.street} ${address.number} ${address.postalCode || ''}`
+          );
+          const words = addressLine.split(' ').filter(Boolean);
+          return tokens.every(token => {
+            if (addressLine.includes(token)) return true;
+            return fuzzyTokenMatch(token, words);
+          });
+        });
+      }
     }
 
     const sortBy = query.sortBy || 'street';
@@ -381,6 +604,7 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
     let created = 0;
     let updated = 0;
 
+    const importedAt = new Date();
     for (const item of items) {
       const key = buildImportKey({
         street: item.street,
@@ -403,6 +627,7 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
             declaredContainers: item.declaredContainers || null,
             composting: item.composting || null,
             active: item.active ?? true,
+            importedAt,
           },
         });
         updated += 1;
@@ -419,6 +644,7 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
           declaredContainers: item.declaredContainers || null,
           composting: item.composting || null,
           active: item.active ?? true,
+          importedAt,
         },
       });
       created += 1;

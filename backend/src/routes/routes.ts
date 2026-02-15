@@ -367,16 +367,25 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
     });
 
     if (isCollected && !routeAddress.isCollected) {
-      await prisma.collectionLog.create({
-        data: {
-          addressId,
-          routeId,
-          collectedAt: new Date(),
-          routeDate: routeAddress.route?.date || null,
-          waste: body.waste || routeAddress.waste,
-          collectedById: reporterId || null,
-        },
-      });
+      const collectionLogClient = (prisma as any).collectionLog;
+      if (collectionLogClient?.create) {
+        try {
+          await collectionLogClient.create({
+            data: {
+              addressId,
+              routeId,
+              collectedAt: new Date(),
+              routeDate: routeAddress.route?.date || null,
+              waste: body.waste || routeAddress.waste,
+              collectedById: reporterId || null,
+            },
+          });
+        } catch (error) {
+          request.log.warn({ error }, 'Failed to create collection log');
+        }
+      } else {
+        request.log.warn('collectionLog client is unavailable - skipping log creation');
+      }
     }
 
     const address = await prisma.address.findUnique({ where: { id: addressId } });

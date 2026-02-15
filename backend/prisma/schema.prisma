@@ -20,6 +20,7 @@ model Address {
   active             Boolean  @default(true)
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
+  importedAt         DateTime?
 
   routeAddresses RouteAddress[]
   collectionLogs CollectionLog[]
