@@ -85,6 +85,7 @@ export const AddressesManagement = () => {
   const [updatedTo, setUpdatedTo] = useState('');
   const [importedFrom, setImportedFrom] = useState('');
   const [importedTo, setImportedTo] = useState('');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [sortBy, setSortBy] = useState<'street' | 'city' | 'createdAt' | 'number'>('street');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [page, setPage] = useState(1);
@@ -885,12 +886,23 @@ export const AddressesManagement = () => {
           </div>
 
           <div className="pt-2 border-t border-border">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Filter className="w-4 h-4" />
-              Zaawansowane filtry
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Filter className="w-4 h-4" />
+                Zaawansowane filtry
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setShowAdvancedFilters(prev => !prev)}
+              >
+                {showAdvancedFilters ? 'Ukryj' : 'Pokaż'}
+              </Button>
             </div>
 
-            <div className="mt-3 flex flex-col md:flex-row flex-wrap gap-3">
+            {showAdvancedFilters && (
+              <>
+                <div className="mt-3 flex flex-col md:flex-row flex-wrap gap-3">
               <div className="flex flex-col gap-1">
                 <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
                   <MapPin className="w-3.5 h-3.5" />
@@ -976,7 +988,7 @@ export const AddressesManagement = () => {
               </div>
             </div>
 
-            <div className="mt-3 flex flex-col md:flex-row flex-wrap gap-3">
+                <div className="mt-3 flex flex-col md:flex-row flex-wrap gap-3">
               <div className="flex flex-col gap-1">
                 <span className="text-xs text-muted-foreground">Status danych</span>
                 <Popover>
@@ -1085,7 +1097,7 @@ export const AddressesManagement = () => {
               </div>
             </div>
 
-            <div className="mt-3 grid gap-3 md:grid-cols-3">
+                <div className="mt-3 grid gap-3 md:grid-cols-3">
               <div className="flex flex-col gap-1">
                 <span className="text-xs text-muted-foreground">Utworzono (od-do)</span>
                 <div className="flex gap-2">
@@ -1107,7 +1119,9 @@ export const AddressesManagement = () => {
                   <Input type="date" value={importedTo} onChange={(e) => setImportedTo(e.target.value)} />
                 </div>
               </div>
-            </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
 
