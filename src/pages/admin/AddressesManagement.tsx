@@ -685,6 +685,11 @@ export const AddressesManagement = () => {
           <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+              {searchQuery.trim() && (
+                <span className="absolute left-10 top-1/2 -translate-y-1/2 rounded-full bg-primary/10 px-2 py-0.5 text-[11px] text-primary">
+                  aktywne
+                </span>
+              )}
             <Input
                 type="search"
                 placeholder="Szukaj: miasto, ulica, numer, kod pocztowy..."
@@ -698,7 +703,7 @@ export const AddressesManagement = () => {
               }}
                 onFocus={() => setShowSuggestions(true)}
                 onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-                className="pl-10"
+                className={searchQuery.trim() ? 'pl-24' : 'pl-10'}
               />
             <Button
               type="button"
@@ -728,6 +733,16 @@ export const AddressesManagement = () => {
               )}
             </div>
             <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() => {
+                  setSearchDraft('');
+                  setSearchQuery('');
+                }}
+              >
+                Resetuj wyszukiwanie
+              </Button>
               <Button className="gap-2" onClick={handleOpenCreate}>
                 <Plus className="w-4 h-4" />
                 Dodaj adres
