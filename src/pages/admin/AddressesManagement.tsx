@@ -61,6 +61,7 @@ type AddressFormValues = z.infer<typeof addressSchema>;
 export const AddressesManagement = () => {
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchDraft, setSearchDraft] = useState('');
   const [cityFilter, setCityFilter] = useState('ALL');
   const [wasteFilter, setWasteFilter] = useState<WasteType[]>([]);
   const [wasteGroupFilter, setWasteGroupFilter] = useState<
@@ -286,6 +287,7 @@ export const AddressesManagement = () => {
 
   const clearFilters = () => {
     setSearchQuery('');
+    setSearchDraft('');
     setCityFilter('ALL');
     setWasteFilter([]);
     setWasteGroupFilter([]);
@@ -439,7 +441,7 @@ export const AddressesManagement = () => {
   };
 
   const suggestions = useMemo(() => {
-    const query = normalizeAddressSearch(searchQuery);
+    const query = normalizeAddressSearch(searchDraft);
     if (query.length < 3) return [];
     const unique = new Map<string, string>();
     addresses.forEach(address => {
@@ -450,7 +452,12 @@ export const AddressesManagement = () => {
       }
     });
     return Array.from(unique.values()).slice(0, 6);
-  }, [addresses, searchQuery]);
+  }, [addresses, searchDraft]);
+
+  const applySearch = () => {
+    const trimmed = searchDraft.trim();
+    setSearchQuery(trimmed);
+  };
 
   const formatAddressLabel = (address: AdminAddress) => {
     const postalPart = address.postalCode ? `${address.postalCode} ` : '';
@@ -678,15 +685,29 @@ export const AddressesManagement = () => {
           <div className="flex flex-col lg:flex-row items-stretch lg:items-center gap-3">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-              <Input
+            <Input
                 type="search"
                 placeholder="Szukaj: miasto, ulica, numer, kod pocztowy..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+              value={searchDraft}
+              onChange={(e) => setSearchDraft(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  applySearch();
+                }
+              }}
                 onFocus={() => setShowSuggestions(true)}
                 onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
                 className="pl-10"
               />
+            <Button
+              type="button"
+              variant="default"
+              className="absolute right-2 top-1/2 -translate-y-1/2 h-8 px-3"
+              onClick={applySearch}
+            >
+              Szukaj
+            </Button>
               {showSuggestions && suggestions.length > 0 && (
                 <div className="absolute z-20 mt-2 w-full rounded-xl border border-border bg-card shadow-lg">
                   {suggestions.map(item => (
@@ -695,7 +716,8 @@ export const AddressesManagement = () => {
                       type="button"
                       className="w-full text-left px-4 py-2 text-sm hover:bg-accent"
                       onMouseDown={() => {
-                        setSearchQuery(item);
+                      setSearchDraft(item);
+                      setSearchQuery(item);
                         setShowSuggestions(false);
                       }}
                     >
