@@ -1,5 +1,5 @@
 import { apiClient } from '../client';
-import { Route, Address, WasteCategory, AddressStatus, AddressIssueReason, AddressIssueFlag } from '@/types/waste';
+import { Route, Address, WasteCategory, AddressStatus, AddressIssueReason, AddressIssueFlag, WasteType } from '@/types/waste';
 import { QueryParams } from '@/types/api';
 import { RouteFormData } from '@/types/admin';
 
@@ -39,6 +39,7 @@ class RoutesService {
       issueNote?: string;
       issuePhoto?: string;
       issuePhotoFile?: File;
+      selectedWasteTypes?: WasteType[];
     }
   ): Promise<Address> {
     const status = details?.status ?? 'COLLECTED';
@@ -46,6 +47,9 @@ class RoutesService {
       const formData = new FormData();
       formData.append('waste', JSON.stringify(waste));
       formData.append('status', status);
+      if (details.selectedWasteTypes) {
+        formData.append('selectedWasteTypes', JSON.stringify(details.selectedWasteTypes));
+      }
       if (details.issueReason) {
         formData.append('issueReason', details.issueReason);
       }
@@ -64,6 +68,7 @@ class RoutesService {
       waste,
       status,
       isCollected: status === 'COLLECTED',
+      selectedWasteTypes: details?.selectedWasteTypes,
       issueReason: details?.issueReason,
       issueFlags: details?.issueFlags,
       issueNote: details?.issueNote,

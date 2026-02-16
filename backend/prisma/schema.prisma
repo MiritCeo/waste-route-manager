@@ -51,6 +51,7 @@ model RouteAddress {
   waste         Json
   status        String  @default("PENDING")
   isCollected   Boolean @default(false)
+  collectedWasteTypes Json?
   issueReason   String?
   issueFlags    Json?
   issueNote     String?

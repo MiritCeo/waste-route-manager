@@ -70,8 +70,15 @@ export const AddressList = () => {
       return { all: 0, pending: 0, collected: 0, deferred: 0, issues: 0 };
     }
 
-    const getStatus = (address: Address): AddressStatus =>
-      address.status ?? (address.isCollected ? 'COLLECTED' : 'PENDING');
+    const getStatus = (address: Address): AddressStatus => {
+      if (address.status === 'ISSUE' || address.status === 'DEFERRED') return address.status;
+      if (selectedWasteTypes.length > 0) {
+        const collected = address.collectedWasteTypes || [];
+        const isCollected = selectedWasteTypes.every(type => collected.includes(type));
+        return isCollected ? 'COLLECTED' : 'PENDING';
+      }
+      return address.status ?? (address.isCollected ? 'COLLECTED' : 'PENDING');
+    };
 
     const statuses = selectedRoute.addresses.map(getStatus);
 
@@ -87,8 +94,15 @@ export const AddressList = () => {
   // Filter addresses - MUST be before any conditional returns
   const filteredAddresses = useMemo(() => {
     if (!selectedRoute) return [];
-    const getStatus = (address: Address): AddressStatus =>
-      address.status ?? (address.isCollected ? 'COLLECTED' : 'PENDING');
+    const getStatus = (address: Address): AddressStatus => {
+      if (address.status === 'ISSUE' || address.status === 'DEFERRED') return address.status;
+      if (selectedWasteTypes.length > 0) {
+        const collected = address.collectedWasteTypes || [];
+        const isCollected = selectedWasteTypes.every(type => collected.includes(type));
+        return isCollected ? 'COLLECTED' : 'PENDING';
+      }
+      return address.status ?? (address.isCollected ? 'COLLECTED' : 'PENDING');
+    };
 
     switch (filter) {
       case 'pending':
@@ -102,7 +116,7 @@ export const AddressList = () => {
       default:
         return selectedRoute.addresses;
     }
-  }, [selectedRoute, filter]);
+  }, [selectedRoute, filter, selectedWasteTypes]);
 
   const handleScroll = useCallback(() => {
     if (isRestoringRef.current) return;
@@ -445,39 +459,76 @@ export const AddressList = () => {
         ) : useVirtualization ? (
           <div style={{ height: totalHeight, position: 'relative' }}>
             <div style={{ transform: `translateY(${offsetTop}px)` }}>
-              {visibleItems.map((address) => (
-                <div key={address.id} style={{ height: rowHeight }} className="pb-2 last:pb-0">
-                  <AddressCard
-                    address={address}
-                    hasDraft={routeId ? hasCollectionDraft(routeId, address.id) : false}
-                    onSelect={handleSelectAddress}
-                    className="h-full"
-                  />
-                </div>
-              ))}
+              {visibleItems.map((address) => {
+                const collected = address.collectedWasteTypes || [];
+                const computedCollected =
+                  selectedWasteTypes.length > 0
+                    ? selectedWasteTypes.every(type => collected.includes(type))
+                    : address.isCollected;
+                const computedStatus =
+                  address.status === 'ISSUE' || address.status === 'DEFERRED'
+                    ? address.status
+                    : computedCollected
+                      ? 'COLLECTED'
+                      : 'PENDING';
+                const addressForView = {
+                  ...address,
+                  status: computedStatus,
+                  isCollected: computedCollected,
+                };
+                return (
+                  <div key={address.id} style={{ height: rowHeight }} className="pb-2 last:pb-0">
+                    <AddressCard
+                      address={addressForView}
+                      hasDraft={routeId ? hasCollectionDraft(routeId, address.id) : false}
+                      onSelect={handleSelectAddress}
+                      className="h-full"
+                    />
+                  </div>
+                );
+              })}
             </div>
           </div>
         ) : (
-          filteredAddresses.map((address) => (
-            <div
-              key={address.id}
-              className="pb-2 last:pb-0"
-              ref={(el) => {
-                if (!el || !restoreTargetId || restoreHandledRef.current) return;
-                if (address.id !== restoreTargetId) return;
-                restoreHandledRef.current = true;
-                el.scrollIntoView({ block: 'center', behavior: 'auto' });
-                requestAnimationFrame(() => setRestoreTargetId(null));
-              }}
-            >
-              <AddressCard
-                address={address}
-                hasDraft={routeId ? hasCollectionDraft(routeId, address.id) : false}
-                onSelect={handleSelectAddress}
-              />
-            </div>
-          ))
-        )}
+          filteredAddresses.map((address) => {
+            const collected = address.collectedWasteTypes || [];
+            const computedCollected =
+              selectedWasteTypes.length > 0
+                ? selectedWasteTypes.every(type => collected.includes(type))
+                : address.isCollected;
+            const computedStatus =
+              address.status === 'ISSUE' || address.status === 'DEFERRED'
+                ? address.status
+                : computedCollected
+                  ? 'COLLECTED'
+                  : 'PENDING';
+            const addressForView = {
+              ...address,
+              status: computedStatus,
+              isCollected: computedCollected,
+            };
+            return (
+              <div
+                key={address.id}
+                className="pb-2 last:pb-0"
+                ref={(el) => {
+                  if (!el || !restoreTargetId || restoreHandledRef.current) return;
+                  if (address.id !== restoreTargetId) return;
+                  restoreHandledRef.current = true;
+                  el.scrollIntoView({ block: 'center', behavior: 'auto' });
+                  requestAnimationFrame(() => setRestoreTargetId(null));
+                }}
+              >
+                <AddressCard
+                  address={addressForView}
+                  hasDraft={routeId ? hasCollectionDraft(routeId, address.id) : false}
+                  onSelect={handleSelectAddress}
+                />
+              </div>
+            );
+          })
+        )
+        }
       </main>
     </div>
   );

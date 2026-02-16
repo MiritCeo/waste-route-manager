@@ -7,6 +7,15 @@ import { Header } from '@/components/Header';
 import { AdminHeaderRight } from '@/components/AdminHeaderRight';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import {
   Form,
@@ -19,10 +28,11 @@ import {
 import { adminService } from '@/api/services/admin.service';
 import { AdminAddress, AdminRoute } from '@/types/admin';
 import { ROUTES } from '@/constants/routes';
-import { ArrowDown, ArrowUp, MoveRight } from 'lucide-react';
+import { ArrowDown, ArrowUp, MoveRight, Filter, MapPin, Tag } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { applyApiFieldErrors } from '@/utils/formErrors';
+import { buildAddressKey } from '@/utils/addressKeys';
 
 const routeSchema = z.object({
   name: z.string().min(2, 'Podaj nazwę trasy'),
@@ -42,7 +52,22 @@ export const RouteEditor = () => {
   const [addressSearch, setAddressSearch] = useState('');
   const [addressFilter, setAddressFilter] = useState<'all' | 'active' | 'inactive'>('all');
   const [assignmentFilter, setAssignmentFilter] = useState<'all' | 'unassigned'>('all');
+  const [cityFilter, setCityFilter] = useState('ALL');
+  const [streetFilter, setStreetFilter] = useState('ALL');
+  const [declarationFilter, setDeclarationFilter] = useState<'ALL' | 'WITH' | 'WITHOUT' | 'MULTI'>('ALL');
+  const [dataStatusFilter, setDataStatusFilter] = useState<string[]>([]);
+  const [numberFrom, setNumberFrom] = useState('');
+  const [numberTo, setNumberTo] = useState('');
+  const [routeCountFilter, setRouteCountFilter] = useState('');
+  const [createdFrom, setCreatedFrom] = useState('');
+  const [createdTo, setCreatedTo] = useState('');
+  const [updatedFrom, setUpdatedFrom] = useState('');
+  const [updatedTo, setUpdatedTo] = useState('');
+  const [importedFrom, setImportedFrom] = useState('');
+  const [importedTo, setImportedTo] = useState('');
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [assignedAddressIds, setAssignedAddressIds] = useState<string[]>([]);
+  const [routeCounts, setRouteCounts] = useState<Record<string, number>>({});
   const [movedMap, setMovedMap] = useState<Record<string, { from: number; to: number }>>({});
   const [draftInfo, setDraftInfo] = useState<RouteDraft | null>(null);
   const [showDraftPrompt, setShowDraftPrompt] = useState(false);
@@ -109,6 +134,15 @@ export const RouteEditor = () => {
           .filter(item => item.id !== routeId)
           .flatMap(item => item.addressIds || []);
         setAssignedAddressIds(assignedIds);
+        const countsMap = new Map<string, number>();
+        routeData
+          .filter(item => item.id !== routeId)
+          .forEach(route => {
+            (route.addressIds || []).forEach(addressId => {
+              countsMap.set(addressId, (countsMap.get(addressId) || 0) + 1);
+            });
+          });
+        setRouteCounts(Object.fromEntries(countsMap));
         if (isEdit) {
           const route = routeData.find(item => item.id === routeId);
           if (!route) {
@@ -164,15 +198,85 @@ export const RouteEditor = () => {
     };
   }, [form]);
 
+  const cityOptions = useMemo(() => {
+    const unique = new Set(addresses.map(address => address.city));
+    return Array.from(unique.values());
+  }, [addresses]);
+
+  const streetOptions = useMemo(() => {
+    const unique = new Set(addresses.map(address => address.street));
+    return Array.from(unique.values());
+  }, [addresses]);
+
+  const normalizeNotes = (notes?: string | null) => (typeof notes === 'string' ? notes : '');
+
+  const extractOwnerFromNotes = (notes?: string | null) => {
+    const safeNotes = normalizeNotes(notes);
+    if (!safeNotes) return '';
+    const line = safeNotes.split('\n').find(item => item.startsWith('Właściciel:'));
+    if (!line) return '';
+    return line.replace('Właściciel:', '').trim();
+  };
+
+  const hasDeclarationFromNotes = (notes?: string | null) =>
+    normalizeNotes(notes).includes('Numer deklaracji:');
+
+  const parseAddressNumber = (value?: string) => {
+    if (!value) return null;
+    const match = value.trim().match(/^(\d+)/);
+    if (!match) return null;
+    return Number(match[1]);
+  };
+
+  const parseDateParam = (value?: string) => {
+    if (!value) return undefined;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+  };
+
+  const addressKeyCounts = useMemo(() => {
+    const map = new Map<string, number>();
+    addresses.forEach(address => {
+      const key = buildAddressKey({
+        street: address.street,
+        number: address.number,
+        city: address.city,
+        postalCode: address.postalCode,
+      });
+      map.set(key, (map.get(key) || 0) + 1);
+    });
+    return map;
+  }, [addresses]);
+
+  const dataStatusLabel = useMemo(() => {
+    if (dataStatusFilter.length === 0) return 'Wszystkie';
+    const labels: Record<string, string> = {
+      missing_number: 'Brak numeru',
+      missing_postal: 'Brak kodu',
+      missing_composting: 'Brak kompost.',
+      suspicious: 'Podejrzany',
+    };
+    const names = dataStatusFilter.map(item => labels[item] || item);
+    if (names.length <= 2) return names.join(', ');
+    return `${names.slice(0, 2).join(', ')} +${names.length - 2}`;
+  }, [dataStatusFilter]);
+
   const filteredAddresses = useMemo(() => {
     const search = addressSearch.trim().toLowerCase();
     let filtered = !search
       ? addresses
-      : addresses.filter(address =>
-          address.street.toLowerCase().includes(search) ||
-          address.city.toLowerCase().includes(search) ||
-          address.number.toLowerCase().includes(search)
-        );
+      : addresses.filter(address => {
+          const street = String(address.street || '').toLowerCase();
+          const city = String(address.city || '').toLowerCase();
+          const number = String(address.number || '').toLowerCase();
+          const postal = String(address.postalCode || '').toLowerCase();
+          return (
+            street.includes(search) ||
+            city.includes(search) ||
+            number.includes(search) ||
+            postal.includes(search)
+          );
+        });
     if (addressFilter === 'active') {
       filtered = filtered.filter(address => address.active);
     }
@@ -185,8 +289,133 @@ export const RouteEditor = () => {
         address => !assignedSet.has(address.id) || selectedAddressIds.includes(address.id)
       );
     }
+    if (cityFilter !== 'ALL') {
+      filtered = filtered.filter(address => address.city === cityFilter);
+    }
+    if (streetFilter !== 'ALL') {
+      filtered = filtered.filter(address => address.street === streetFilter);
+    }
+    if (declarationFilter !== 'ALL') {
+      filtered = filtered.filter(address => {
+        const hasDeclaration = hasDeclarationFromNotes(address.notes);
+        const key = buildAddressKey({
+          street: address.street,
+          number: address.number,
+          city: address.city,
+          postalCode: address.postalCode,
+        });
+        const isMulti = (addressKeyCounts.get(key) || 0) > 1;
+        if (declarationFilter === 'WITH') return hasDeclaration;
+        if (declarationFilter === 'WITHOUT') return !hasDeclaration;
+        if (declarationFilter === 'MULTI') return isMulti;
+        return true;
+      });
+    }
+    if (dataStatusFilter.length > 0) {
+      filtered = filtered.filter(address => {
+        const missingNumber = !address.number || address.number.trim().length === 0;
+        const missingPostal = !address.postalCode || address.postalCode.trim().length === 0;
+        const missingCompost = !address.composting || address.composting.trim().length === 0;
+        const suspicious =
+          !address.street || address.street.trim().length < 2 ||
+          !address.city || address.city.trim().length < 2 ||
+          missingNumber ||
+          !/\d/.test(address.number || '');
+        return dataStatusFilter.some(status => {
+          if (status === 'missing_number') return missingNumber;
+          if (status === 'missing_postal') return missingPostal;
+          if (status === 'missing_composting') return missingCompost;
+          if (status === 'suspicious') return suspicious;
+          return false;
+        });
+      });
+    }
+    if (routeCountFilter) {
+      const expected = Number(routeCountFilter);
+      if (!Number.isNaN(expected)) {
+        filtered = filtered.filter(address => (routeCounts[address.id] || 0) === expected);
+      }
+    }
+    if (numberFrom || numberTo) {
+      const from = numberFrom ? Number(numberFrom) : undefined;
+      const to = numberTo ? Number(numberTo) : undefined;
+      filtered = filtered.filter(address => {
+        const value = parseAddressNumber(address.number);
+        if (value === null) return false;
+        if (from !== undefined && value < from) return false;
+        if (to !== undefined && value > to) return false;
+        return true;
+      });
+    }
+    if (createdFrom || createdTo) {
+      const from = parseDateParam(createdFrom);
+      const to = parseDateParam(createdTo);
+      filtered = filtered.filter(address => {
+        if (!address.createdAt) return false;
+        const date = new Date(address.createdAt);
+        if (from && date < from) return false;
+        if (to) {
+          const end = new Date(to);
+          end.setHours(23, 59, 59, 999);
+          if (date > end) return false;
+        }
+        return true;
+      });
+    }
+    if (updatedFrom || updatedTo) {
+      const from = parseDateParam(updatedFrom);
+      const to = parseDateParam(updatedTo);
+      filtered = filtered.filter(address => {
+        if (!address.updatedAt) return false;
+        const date = new Date(address.updatedAt);
+        if (from && date < from) return false;
+        if (to) {
+          const end = new Date(to);
+          end.setHours(23, 59, 59, 999);
+          if (date > end) return false;
+        }
+        return true;
+      });
+    }
+    if (importedFrom || importedTo) {
+      const from = parseDateParam(importedFrom);
+      const to = parseDateParam(importedTo);
+      filtered = filtered.filter(address => {
+        if (!address.importedAt) return false;
+        const date = new Date(address.importedAt);
+        if (from && date < from) return false;
+        if (to) {
+          const end = new Date(to);
+          end.setHours(23, 59, 59, 999);
+          if (date > end) return false;
+        }
+        return true;
+      });
+    }
     return [...filtered].sort((a, b) => Number(b.active) - Number(a.active));
-  }, [addresses, addressSearch, addressFilter, assignmentFilter, assignedAddressIds, selectedAddressIds]);
+  }, [
+    addresses,
+    addressSearch,
+    addressFilter,
+    assignmentFilter,
+    assignedAddressIds,
+    selectedAddressIds,
+    cityFilter,
+    streetFilter,
+    declarationFilter,
+    dataStatusFilter,
+    numberFrom,
+    numberTo,
+    routeCountFilter,
+    createdFrom,
+    createdTo,
+    updatedFrom,
+    updatedTo,
+    importedFrom,
+    importedTo,
+    routeCounts,
+    addressKeyCounts,
+  ]);
 
   const availableActive = useMemo(
     () => filteredAddresses.filter(address => address.active),
@@ -204,7 +433,8 @@ export const RouteEditor = () => {
   }, [addresses, form]);
 
   const isCompanyAddress = (address: AdminAddress) => {
-    return Boolean(address.notes?.includes('Typ: Firma') || address.notes?.includes('Właściciel:'));
+    const safeNotes = normalizeNotes(address.notes);
+    return Boolean(safeNotes.includes('Typ: Firma') || safeNotes.includes('Właściciel:'));
   };
 
   const moveAddress = (fromIndex: number, toIndex: number) => {
@@ -361,68 +591,265 @@ export const RouteEditor = () => {
             </div>
 
             <div className="grid gap-3 md:grid-cols-2">
-              <FormField
-                control={form.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nazwa trasy</FormLabel>
-                    <FormControl>
-                      <Input {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <div className="flex items-end">
-                <Input
-                  placeholder="Szukaj adresu..."
-                  value={addressSearch}
-                  onChange={(e) => setAddressSearch(e.target.value)}
+              <div className="space-y-2">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Informacje o trasie</p>
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nazwa trasy</FormLabel>
+                      <FormControl>
+                        <Input {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
                 />
               </div>
+              <div className="space-y-2">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Wyszukiwanie adresów</p>
+                <div>
+                  <label className="text-sm font-medium text-foreground">Szukaj adresu</label>
+                  <Input
+                    placeholder="Wpisz ulicę, miasto lub numer..."
+                    value={addressSearch}
+                    onChange={(e) => setAddressSearch(e.target.value)}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
             </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant={addressFilter === 'all' ? 'default' : 'outline'}
-                onClick={() => setAddressFilter('all')}
-              >
-                Wszystkie
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={addressFilter === 'active' ? 'default' : 'outline'}
-                onClick={() => setAddressFilter('active')}
-              >
-                Tylko aktywne
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={addressFilter === 'inactive' ? 'default' : 'outline'}
-                onClick={() => setAddressFilter('inactive')}
-              >
-                Tylko nieaktywne
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={assignmentFilter === 'unassigned' ? 'default' : 'outline'}
-                onClick={() => setAssignmentFilter('unassigned')}
-              >
-                Tylko nieprzypisane
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant={assignmentFilter === 'all' ? 'default' : 'outline'}
-                onClick={() => setAssignmentFilter('all')}
-              >
-                Wszystkie przypisania
-              </Button>
+            <div className="rounded-xl border border-border p-3 space-y-3">
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={addressFilter === 'all' ? 'default' : 'outline'}
+                  onClick={() => setAddressFilter('all')}
+                >
+                  Wszystkie
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={addressFilter === 'active' ? 'default' : 'outline'}
+                  onClick={() => setAddressFilter('active')}
+                >
+                  Tylko aktywne
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={addressFilter === 'inactive' ? 'default' : 'outline'}
+                  onClick={() => setAddressFilter('inactive')}
+                >
+                  Tylko nieaktywne
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={assignmentFilter === 'unassigned' ? 'default' : 'outline'}
+                  onClick={() => setAssignmentFilter('unassigned')}
+                >
+                  Tylko nieprzypisane
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={assignmentFilter === 'all' ? 'default' : 'outline'}
+                  onClick={() => setAssignmentFilter('all')}
+                >
+                  Wszystkie przypisania
+                </Button>
+              </div>
+
+              <div className="flex flex-col md:flex-row flex-wrap gap-3">
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
+                    <MapPin className="w-3.5 h-3.5" />
+                    Miasto
+                  </span>
+                  <Select value={cityFilter} onValueChange={setCityFilter}>
+                    <SelectTrigger className="w-full md:w-52">
+                      <SelectValue placeholder="Miasto" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">Wszystkie miasta</SelectItem>
+                      {cityOptions.map(city => (
+                        <SelectItem key={city} value={city}>
+                          {city}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
+                    <MapPin className="w-3.5 h-3.5" />
+                    Ulica
+                  </span>
+                  <Select value={streetFilter} onValueChange={setStreetFilter}>
+                    <SelectTrigger className="w-full md:w-52">
+                      <SelectValue placeholder="Ulica" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ALL">Wszystkie ulice</SelectItem>
+                      {streetOptions.map(street => (
+                        <SelectItem key={street} value={street}>
+                          {street}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+              </div>
+
+              <div className="flex items-center justify-between gap-3 pt-2 border-t border-border">
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Filter className="w-4 h-4" />
+                  Zaawansowane filtry
+                </div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  type="button"
+                  onClick={() => setShowAdvancedFilters(prev => !prev)}
+                >
+                  {showAdvancedFilters ? 'Ukryj' : 'Pokaż'}
+                </Button>
+              </div>
+
+              {showAdvancedFilters && (
+                <>
+                  <div className="flex flex-col md:flex-row flex-wrap gap-3">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs text-muted-foreground">Typ deklaracji</span>
+                      <Select value={declarationFilter} onValueChange={(value) => setDeclarationFilter(value as typeof declarationFilter)}>
+                        <SelectTrigger className="w-full md:w-52">
+                          <SelectValue placeholder="Typ deklaracji" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="ALL">Wszystkie</SelectItem>
+                          <SelectItem value="WITH">Z deklaracją</SelectItem>
+                          <SelectItem value="WITHOUT">Bez deklaracji</SelectItem>
+                          <SelectItem value="MULTI">Wielodeklaracyjne</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs text-muted-foreground">Status danych</span>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <Button variant="outline" className="w-full md:w-52 justify-between">
+                            <span className="truncate text-left">{dataStatusLabel}</span>
+                            <span className="text-xs text-muted-foreground">{dataStatusFilter.length}</span>
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent align="start" className="w-64 p-3">
+                          <div className="flex items-center justify-between pb-2 border-b border-border">
+                            <span className="text-sm font-medium">Status danych</span>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2"
+                              onClick={() => setDataStatusFilter([])}
+                            >
+                              Wyczyść
+                            </Button>
+                          </div>
+                          <div className="mt-2 space-y-2">
+                            {[
+                              { id: 'missing_number', label: 'Brak numeru' },
+                              { id: 'missing_postal', label: 'Brak kodu' },
+                              { id: 'missing_composting', label: 'Brak kompostownika' },
+                              { id: 'suspicious', label: 'Podejrzany wpis' },
+                            ].map(option => {
+                              const isChecked = dataStatusFilter.includes(option.id);
+                              return (
+                                <label key={option.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                                  <Checkbox
+                                    checked={isChecked}
+                                    onCheckedChange={(checked) => {
+                                      setDataStatusFilter(prev =>
+                                        checked
+                                          ? [...prev, option.id]
+                                          : prev.filter(item => item !== option.id)
+                                      );
+                                    }}
+                                  />
+                                  <span>{option.label}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </PopoverContent>
+                      </Popover>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs text-muted-foreground">Liczba tras</span>
+                      <Input
+                        type="number"
+                        min={0}
+                        placeholder="np. 2"
+                        value={routeCountFilter}
+                        onChange={(e) => setRouteCountFilter(e.target.value)}
+                        className="w-36"
+                      />
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs text-muted-foreground">Numer (od-do)</span>
+                      <div className="flex gap-2">
+                        <Input
+                          type="number"
+                          min={0}
+                          placeholder="Od"
+                          value={numberFrom}
+                          onChange={(e) => setNumberFrom(e.target.value)}
+                          className="w-24"
+                        />
+                        <Input
+                          type="number"
+                          min={0}
+                          placeholder="Do"
+                          value={numberTo}
+                          onChange={(e) => setNumberTo(e.target.value)}
+                          className="w-24"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs text-muted-foreground">Utworzono (od-do)</span>
+                      <div className="flex gap-2">
+                        <Input type="date" value={createdFrom} onChange={(e) => setCreatedFrom(e.target.value)} />
+                        <Input type="date" value={createdTo} onChange={(e) => setCreatedTo(e.target.value)} />
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs text-muted-foreground">Ostatnia edycja (od-do)</span>
+                      <div className="flex gap-2">
+                        <Input type="date" value={updatedFrom} onChange={(e) => setUpdatedFrom(e.target.value)} />
+                        <Input type="date" value={updatedTo} onChange={(e) => setUpdatedTo(e.target.value)} />
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs text-muted-foreground">Ostatni import (od-do)</span>
+                      <div className="flex gap-2">
+                        <Input type="date" value={importedFrom} onChange={(e) => setImportedFrom(e.target.value)} />
+                        <Input type="date" value={importedTo} onChange={(e) => setImportedTo(e.target.value)} />
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
 
             <FormField

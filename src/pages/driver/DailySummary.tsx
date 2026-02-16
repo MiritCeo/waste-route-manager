@@ -26,7 +26,7 @@ interface WasteStats {
 export const DailySummary = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
-  const { routes } = useRoutes();
+  const { routes, selectedWasteTypes } = useRoutes();
 
   const handleBack = () => {
     navigate(ROUTES.DRIVER.ROUTES);
@@ -44,7 +44,14 @@ export const DailySummary = () => {
     routes.forEach(route => {
       totalAddresses += route.totalAddresses;
       route.addresses.forEach(address => {
-        const isCollected = address.status ? address.status === 'COLLECTED' : address.isCollected;
+        const isCollected = (() => {
+          if (address.status === 'ISSUE' || address.status === 'DEFERRED') return false;
+          if (selectedWasteTypes.length > 0) {
+            const collected = address.collectedWasteTypes || [];
+            return selectedWasteTypes.every(type => collected.includes(type));
+          }
+          return address.status ? address.status === 'COLLECTED' : address.isCollected;
+        })();
         if (isCollected) {
           collectedAddresses++;
           (address.waste ?? []).forEach(waste => {
@@ -73,7 +80,7 @@ export const DailySummary = () => {
       wasteStats,
       totalWaste,
     };
-  }, [routes]);
+  }, [routes, selectedWasteTypes]);
 
   const getWasteColorClass = (wasteId: string): string => {
     const colors: Record<string, string> = {

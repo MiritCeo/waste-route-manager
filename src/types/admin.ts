@@ -125,6 +125,8 @@ export interface AdminAddress {
   declaredContainers?: DeclaredContainer[];
   active: boolean;
   createdAt: string;
+  updatedAt?: string;
+  importedAt?: string;
 }
 
 export interface AdminRoute extends Route {

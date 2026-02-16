@@ -123,6 +123,7 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
             isCollected: false,
             status: 'PENDING',
             waste: resetWasteByAddress.get(item.id) || [],
+            collectedWasteTypes: Prisma.JsonNull,
             issueReason: null,
             issueFlags: Prisma.JsonNull,
             issueNote: null,
@@ -148,6 +149,7 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
         isCollected: false,
         status: 'PENDING',
         waste: resetWasteByAddress.get(item.id) || [],
+        collectedWasteTypes: [],
         issueReason: null,
         issueFlags: null,
         issueNote: null,
@@ -190,6 +192,9 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
           isCollected: item.isCollected,
           status: item.status,
           ownerName: extractOwnerFromNotes(item.address.notes),
+          collectedWasteTypes: Array.isArray(item.collectedWasteTypes)
+            ? (item.collectedWasteTypes as string[])
+            : [],
         };
         if (isSummary) return base;
         return {
@@ -262,6 +267,9 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
           isCollected: item.isCollected,
           status: item.status,
           ownerName: extractOwnerFromNotes(item.address.notes),
+          collectedWasteTypes: Array.isArray(item.collectedWasteTypes)
+            ? (item.collectedWasteTypes as string[])
+            : [],
         };
         if (isSummary) return base;
         return {
@@ -294,6 +302,9 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
       isCollected: routeAddress.isCollected,
       status: routeAddress.status,
       waste: buildWasteList(routeAddress.address, routeAddress.waste),
+      collectedWasteTypes: Array.isArray(routeAddress.collectedWasteTypes)
+        ? (routeAddress.collectedWasteTypes as string[])
+        : [],
       issueReason: routeAddress.issueReason || undefined,
       issueFlags: (routeAddress.issueFlags as string[]) || [],
       issueNote: routeAddress.issueNote || undefined,
@@ -325,6 +336,9 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
       if (typeof body.issueFlags === 'string') {
         body.issueFlags = parseJsonValue(body.issueFlags) ?? body.issueFlags;
       }
+      if (typeof body.selectedWasteTypes === 'string') {
+        body.selectedWasteTypes = parseJsonValue(body.selectedWasteTypes) ?? body.selectedWasteTypes;
+      }
     } else {
       body = request.body as any;
     }
@@ -341,12 +355,24 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
       return reply.status(404).send({ message: 'Nie znaleziono adresu w trasie' });
     }
 
+    const selectedWasteTypes = Array.isArray(body.selectedWasteTypes)
+      ? body.selectedWasteTypes.map((item: unknown) => String(item))
+      : [];
+    const existingCollectedTypes = Array.isArray(routeAddress.collectedWasteTypes)
+      ? (routeAddress.collectedWasteTypes as string[])
+      : [];
+    const nextCollectedTypes =
+      status === 'COLLECTED' && selectedWasteTypes.length > 0
+        ? Array.from(new Set([...existingCollectedTypes, ...selectedWasteTypes]))
+        : existingCollectedTypes;
+
     await prisma.routeAddress.update({
       where: { id: routeAddress.id },
       data: {
         waste: body.waste || routeAddress.waste,
         status,
         isCollected,
+        collectedWasteTypes: nextCollectedTypes,
         issueReason: isIssueStatus ? (body.issueReason || null) : null,
         issueFlags: isIssueStatus ? (body.issueFlags || null) : null,
         issueNote: isIssueStatus ? (body.issueNote || null) : null,
@@ -397,6 +423,7 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
       isCollected,
       status,
       waste: body.waste || routeAddress.waste,
+      collectedWasteTypes: nextCollectedTypes,
       issueReason: isIssueStatus ? body.issueReason : undefined,
       issueFlags: isIssueStatus ? (body.issueFlags || []) : [],
       issueNote: isIssueStatus ? body.issueNote : undefined,

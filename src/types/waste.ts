@@ -39,6 +39,7 @@ export interface Address {
   isCollected: boolean;
   waste?: WasteCategory[];
   status?: AddressStatus;
+  collectedWasteTypes?: WasteType[];
   issueReason?: AddressIssueReason;
   issueFlags?: AddressIssueFlag[];
   issueNote?: string;

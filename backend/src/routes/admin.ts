@@ -356,6 +356,8 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
       composting: address.composting || undefined,
       active: address.active,
       createdAt: address.createdAt.toISOString(),
+      updatedAt: address.updatedAt.toISOString(),
+      importedAt: address.importedAt ? address.importedAt.toISOString() : undefined,
     }));
   });
 
@@ -531,6 +533,8 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
       composting: address.composting || undefined,
       active: address.active,
       createdAt: address.createdAt.toISOString(),
+      updatedAt: address.updatedAt.toISOString(),
+      importedAt: address.importedAt ? address.importedAt.toISOString() : undefined,
     };
   });
 
@@ -567,6 +571,8 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
       composting: updated.composting || undefined,
       active: updated.active,
       createdAt: updated.createdAt.toISOString(),
+      updatedAt: updated.updatedAt.toISOString(),
+      importedAt: updated.importedAt ? updated.importedAt.toISOString() : undefined,
     };
   });
 

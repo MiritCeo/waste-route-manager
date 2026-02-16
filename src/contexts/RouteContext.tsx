@@ -45,6 +45,7 @@ interface CollectionDetails {
   issueNote?: string;
   issuePhoto?: string;
   issuePhotoFile?: File;
+  selectedWasteTypes?: WasteType[];
 }
 
 interface CollectionDraft extends CollectionDetails {
@@ -133,6 +134,7 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           issueFlags: updated.issueFlags ?? op.payload.details?.issueFlags,
           issueNote: updated.issueNote ?? op.payload.details?.issueNote,
           issuePhoto: updated.issuePhoto ?? op.payload.details?.issuePhoto,
+          collectedWasteTypes: updated.collectedWasteTypes ?? op.payload.details?.selectedWasteTypes,
         });
       } catch {
         remaining.push(op);
@@ -302,6 +304,7 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
             waste: update.waste,
             status: update.status,
             isCollected: update.status === 'COLLECTED',
+          collectedWasteTypes: update.collectedWasteTypes ?? addr.collectedWasteTypes,
             issueReason: update.issueReason ?? undefined,
             issueFlags: update.issueFlags ?? [],
             issueNote: update.issueNote ?? undefined,
@@ -332,6 +335,7 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           waste: update.waste,
           status: update.status,
           isCollected: update.status === 'COLLECTED',
+          collectedWasteTypes: update.collectedWasteTypes ?? addr.collectedWasteTypes,
           issueReason: update.issueReason ?? undefined,
           issueFlags: update.issueFlags ?? [],
           issueNote: update.issueNote ?? undefined,
@@ -364,6 +368,7 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       issueFlags?: AddressIssueFlag[];
       issueNote?: string;
       issuePhoto?: string;
+      collectedWasteTypes?: WasteType[];
     }
   ) => {
     const key = `${routeId}:${addressId}`;
@@ -390,6 +395,7 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         issueFlags: updatedAddress.issueFlags ?? details?.issueFlags,
         issueNote: updatedAddress.issueNote ?? details?.issueNote,
         issuePhoto: updatedAddress.issuePhoto ?? details?.issuePhoto,
+        collectedWasteTypes: updatedAddress.collectedWasteTypes ?? details?.selectedWasteTypes,
       });
 
       clearCollectionDraft(routeId, addressId);
@@ -409,6 +415,7 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
           issueFlags: details?.issueFlags,
           issueNote: details?.issueNote,
           issuePhoto: details?.issuePhoto,
+          collectedWasteTypes: details?.selectedWasteTypes,
         });
 
         const queue = getSyncQueue();
@@ -450,6 +457,7 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         status: address.status,
         waste: address.waste,
         ownerName: address.ownerName,
+        collectedWasteTypes: address.collectedWasteTypes,
       })),
     }));
 

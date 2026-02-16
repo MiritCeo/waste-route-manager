@@ -221,6 +221,7 @@ export const CollectionView = () => {
 
       await updateAddressCollection(routeId, addressId, wasteForSave, {
         status,
+        selectedWasteTypes: status === 'COLLECTED' ? selectedWasteTypes : undefined,
         issueReason: status !== 'COLLECTED' ? (issueReason || undefined) : undefined,
         issueFlags: status === 'ISSUE' ? issueFlags : [],
         issueNote: status === 'ISSUE' ? (issueNote.trim() || undefined) : undefined,
