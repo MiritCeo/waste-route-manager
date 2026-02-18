@@ -66,6 +66,8 @@ export const RouteEditor = () => {
   const [importedFrom, setImportedFrom] = useState('');
   const [importedTo, setImportedTo] = useState('');
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [sortBy, setSortBy] = useState<'street' | 'number' | 'city'>('street');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [assignedAddressIds, setAssignedAddressIds] = useState<string[]>([]);
   const [routeCounts, setRouteCounts] = useState<Record<string, number>>({});
   const [movedMap, setMovedMap] = useState<Record<string, { from: number; to: number }>>({});
@@ -226,6 +228,16 @@ export const RouteEditor = () => {
     const match = value.trim().match(/^(\d+)/);
     if (!match) return null;
     return Number(match[1]);
+  };
+
+  const parseAddressNumberWithSuffix = (value?: string) => {
+    if (!value) return { number: Number.MAX_SAFE_INTEGER, suffix: '' };
+    const match = value.trim().match(/^(\d+)\s*([a-zA-Z]*)/);
+    if (!match) return { number: Number.MAX_SAFE_INTEGER, suffix: value };
+    return {
+      number: Number(match[1]),
+      suffix: (match[2] || '').toLowerCase(),
+    };
   };
 
   const parseDateParam = (value?: string) => {
@@ -392,7 +404,25 @@ export const RouteEditor = () => {
         return true;
       });
     }
-    return [...filtered].sort((a, b) => Number(b.active) - Number(a.active));
+    return [...filtered].sort((a, b) => {
+      const direction = sortOrder === 'desc' ? -1 : 1;
+      if (sortBy === 'number') {
+        const aNum = parseAddressNumberWithSuffix(a.number);
+        const bNum = parseAddressNumberWithSuffix(b.number);
+        if (aNum.number !== bNum.number) return (aNum.number - bNum.number) * direction;
+        return aNum.suffix.localeCompare(bNum.suffix, 'pl') * direction;
+      }
+      if (sortBy === 'city') {
+        return a.city.localeCompare(b.city, 'pl') * direction;
+      }
+      // default: street then number
+      const streetCompare = a.street.localeCompare(b.street, 'pl');
+      if (streetCompare !== 0) return streetCompare * direction;
+      const aNum = parseAddressNumberWithSuffix(a.number);
+      const bNum = parseAddressNumberWithSuffix(b.number);
+      if (aNum.number !== bNum.number) return (aNum.number - bNum.number) * direction;
+      return aNum.suffix.localeCompare(bNum.suffix, 'pl') * direction;
+    });
   }, [
     addresses,
     addressSearch,
@@ -415,6 +445,8 @@ export const RouteEditor = () => {
     importedTo,
     routeCounts,
     addressKeyCounts,
+    sortBy,
+    sortOrder,
   ]);
 
   const availableActive = useMemo(
@@ -703,6 +735,34 @@ export const RouteEditor = () => {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+
+                <div className="flex flex-col gap-1">
+                  <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
+                    <Tag className="w-3.5 h-3.5" />
+                    Sortowanie
+                  </span>
+                  <div className="flex gap-2">
+                    <Select value={sortBy} onValueChange={(value) => setSortBy(value as typeof sortBy)}>
+                      <SelectTrigger className="w-full md:w-40">
+                        <SelectValue placeholder="Sortuj po" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="street">Ulica</SelectItem>
+                        <SelectItem value="number">Numer</SelectItem>
+                        <SelectItem value="city">Miasto</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={sortOrder} onValueChange={(value) => setSortOrder(value as typeof sortOrder)}>
+                      <SelectTrigger className="w-full md:w-36">
+                        <SelectValue placeholder="Kolejność" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="asc">Rosnąco</SelectItem>
+                        <SelectItem value="desc">Malejąco</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
               </div>
