@@ -8,6 +8,11 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
   type RouteWithAddresses = Prisma.RouteGetPayload<{
     include: { routeAddresses: { include: { address: true } } };
   }>;
+  type DeclaredContainer = { name: string; count: number; frequency?: string };
+  type DeclaredContainerWithRemaining = DeclaredContainer & {
+    type?: WasteType;
+    remaining?: number;
+  };
 
   const parseJsonValue = (value?: string) => {
     if (!value) return undefined;
@@ -54,7 +59,7 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
     return base as WasteType;
   };
 
-  const parseDeclaredContainers = (declaredContainers?: unknown) => {
+  const parseDeclaredContainers = (declaredContainers?: unknown): DeclaredContainer[] => {
     let containers: unknown = declaredContainers;
     if (typeof containers === 'string') {
       try {
@@ -125,9 +130,9 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
   };
 
   const buildDeclaredContainersWithRemaining = (
-    declaredContainers: Array<{ name: string; count: number; frequency?: string }>,
+    declaredContainers: DeclaredContainer[],
     collectedByType: Map<string, number>
-  ) => {
+  ): DeclaredContainerWithRemaining[] => {
     const declaredByType = new Map<WasteType, number>();
     declaredContainers.forEach(item => {
       const mapped = mapDeclaredContainerToType(item.name);
@@ -347,7 +352,7 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
       return reply.status(404).send({ message: 'Nie znaleziono adresu w trasie' });
     }
     const declaredContainers = parseDeclaredContainers(routeAddress.address.declaredContainers);
-    let declaredContainersWithRemaining = declaredContainers;
+    let declaredContainersWithRemaining: DeclaredContainerWithRemaining[] = declaredContainers;
     if (declaredContainers.length > 0) {
       const { start, end } = getMonthRange();
       const logs = await prisma.collectionLog.findMany({
