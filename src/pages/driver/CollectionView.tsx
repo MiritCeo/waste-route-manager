@@ -92,15 +92,12 @@ export const CollectionView = () => {
     if (selectedWasteTypes.length === 0) {
       return waste;
     }
-    if (isCompanyAddress) {
-      return waste;
-    }
     const selected = new Set(selectedWasteTypes);
     return waste.filter(item => {
       if (selected.has(item.id)) return true;
       return Array.from(selected).some(type => item.id.startsWith(`${type}-`));
     });
-  }, [waste, selectedWasteTypes, isCompanyAddress]);
+  }, [waste, selectedWasteTypes]);
 
   const sortedVisibleWaste = useMemo(() => {
     const baseOrder = ['mixed', 'bio-green', 'bio-kitchen', 'paper', 'plastic', 'glass-clear', 'glass-colored', 'ash'];

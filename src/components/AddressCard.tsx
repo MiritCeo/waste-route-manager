@@ -28,16 +28,6 @@ export const AddressCard = memo(({ address, hasDraft, onSelect, className }: Add
   const isIssue = status === 'ISSUE';
   const isDeferred = status === 'DEFERRED';
   const isCompany = Boolean(address.ownerName);
-  const declaredSummary =
-    address.declaredContainers && address.declaredContainers.length > 0
-      ? address.declaredContainers.map(item => {
-          const remaining =
-            typeof item.remaining === 'number'
-              ? `${item.remaining}/${item.count}`
-              : `${item.count}`;
-          return `${item.name} ${remaining}`;
-        })
-      : [];
 
   return (
     <button
@@ -112,12 +102,6 @@ export const AddressCard = memo(({ address, hasDraft, onSelect, className }: Add
             </span>
           )}
         </div>
-        {isCompany && declaredSummary.length > 0 && (
-          <div className="mt-2 text-xs text-muted-foreground max-w-full">
-            <p className="font-medium text-foreground">Deklaracje (pozostało/zadeklarowane)</p>
-            <p className="leading-snug truncate">{declaredSummary.join(' • ')}</p>
-          </div>
-        )}
       </div>
 
       <ChevronRight className={cn(
