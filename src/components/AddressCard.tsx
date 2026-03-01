@@ -44,7 +44,7 @@ export const AddressCard = memo(({ address, hasDraft, onSelect, className }: Add
       onClick={() => onSelect(address.id)}
       className={cn(
         'w-full bg-card rounded-2xl p-4 shadow-sm border',
-        'flex items-center gap-4 transition-all duration-150',
+        'flex items-center gap-4 transition-all duration-150 overflow-hidden',
         'active:scale-[0.98] focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2',
         isCollected 
           ? 'border-success/30 bg-success/5' 
@@ -115,7 +115,7 @@ export const AddressCard = memo(({ address, hasDraft, onSelect, className }: Add
         {isCompany && declaredSummary.length > 0 && (
           <div className="mt-2 text-xs text-muted-foreground max-w-full">
             <p className="font-medium text-foreground">Deklaracje (pozostało/zadeklarowane)</p>
-            <p className="leading-snug break-words line-clamp-2">{declaredSummary.join(' • ')}</p>
+            <p className="leading-snug truncate">{declaredSummary.join(' • ')}</p>
           </div>
         )}
       </div>
