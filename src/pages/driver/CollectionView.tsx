@@ -36,7 +36,13 @@ export const CollectionView = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isDraftLocked, setIsDraftLocked] = useState(false);
   const isCompanyAddress = useMemo(
-    () => Boolean(address?.notes?.includes('Typ: Firma') || address?.notes?.includes('Właściciel:')),
+    () =>
+      Boolean(
+        address?.ownerName ||
+          (address?.declaredContainers && address.declaredContainers.length > 0) ||
+          address?.notes?.includes('Typ: Firma') ||
+          address?.notes?.includes('Właściciel:')
+      ),
     [address]
   );
   const declaredContainers = useMemo(() => {

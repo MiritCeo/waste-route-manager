@@ -160,6 +160,39 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
     });
   };
 
+  const aggregateCollectedByAddress = async (addressIds: string[]) => {
+    if (!addressIds.length) return new Map<string, Map<string, number>>();
+    const { start, end } = getMonthRange();
+    const logs = await prisma.collectionLog.findMany({
+      where: {
+        addressId: { in: addressIds },
+        collectedAt: {
+          gte: start,
+          lt: end,
+        },
+      },
+      select: {
+        addressId: true,
+        waste: true,
+      },
+    });
+    const collectedByAddress = new Map<string, Map<string, number>>();
+    logs.forEach(log => {
+      const waste = log.waste as any;
+      if (!Array.isArray(waste)) return;
+      const mapForAddress =
+        collectedByAddress.get(log.addressId) || new Map<string, number>();
+      waste.forEach((item: any) => {
+        if (!item?.id) return;
+        const count = Number(item.count ?? 0) || 0;
+        if (!count) return;
+        mapForAddress.set(item.id, (mapForAddress.get(item.id) || 0) + count);
+      });
+      collectedByAddress.set(log.addressId, mapForAddress);
+    });
+    return collectedByAddress;
+  };
+
   const resetRouteIfNeeded = async (route: RouteWithAddresses): Promise<RouteWithAddresses> => {
     if (route.date && route.date >= startOfToday) {
       return route;
@@ -232,6 +265,10 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
     });
 
     const normalizedRoutes = await Promise.all(routes.map(resetRouteIfNeeded));
+    const allAddressIds = normalizedRoutes.flatMap(route =>
+      route.routeAddresses.map(item => item.address.id)
+    );
+    const collectedByAddress = await aggregateCollectedByAddress(allAddressIds);
 
     return normalizedRoutes.map((route: RouteWithAddresses) => ({
       id: route.id,
@@ -241,6 +278,14 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
       totalAddresses: route.totalAddresses,
       collectedAddresses: route.collectedAddresses,
       addresses: route.routeAddresses.map((item: RouteWithAddresses['routeAddresses'][number]) => {
+        const declaredContainers = parseDeclaredContainers(item.address.declaredContainers);
+        const declaredContainersWithRemaining =
+          declaredContainers.length > 0
+            ? buildDeclaredContainersWithRemaining(
+                declaredContainers,
+                collectedByAddress.get(item.address.id) || new Map()
+              )
+            : declaredContainers;
         const base = {
           id: item.address.id,
           street: item.address.street,
@@ -252,6 +297,7 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
           collectedWasteTypes: Array.isArray(item.collectedWasteTypes)
             ? (item.collectedWasteTypes as string[])
             : [],
+          declaredContainers: declaredContainersWithRemaining,
         };
         if (isSummary) return base;
         return {
@@ -307,6 +353,8 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
     }
 
     route = await resetRouteIfNeeded(route as RouteWithAddresses);
+    const addressIds = route.routeAddresses.map(item => item.address.id);
+    const collectedByAddress = await aggregateCollectedByAddress(addressIds);
 
     return {
       id: route.id,
@@ -316,6 +364,14 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
       totalAddresses: route.totalAddresses,
       collectedAddresses: route.collectedAddresses,
       addresses: route.routeAddresses.map((item: RouteWithAddresses['routeAddresses'][number]) => {
+        const declaredContainers = parseDeclaredContainers(item.address.declaredContainers);
+        const declaredContainersWithRemaining =
+          declaredContainers.length > 0
+            ? buildDeclaredContainersWithRemaining(
+                declaredContainers,
+                collectedByAddress.get(item.address.id) || new Map()
+              )
+            : declaredContainers;
         const base = {
           id: item.address.id,
           street: item.address.street,
@@ -327,6 +383,7 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
           collectedWasteTypes: Array.isArray(item.collectedWasteTypes)
             ? (item.collectedWasteTypes as string[])
             : [],
+          declaredContainers: declaredContainersWithRemaining,
         };
         if (isSummary) return base;
         return {
