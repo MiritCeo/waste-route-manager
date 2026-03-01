@@ -54,7 +54,7 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
     return base as WasteType;
   };
 
-  const buildCompanyWaste = (declaredContainers?: unknown): WasteType[] => {
+  const parseDeclaredContainers = (declaredContainers?: unknown) => {
     let containers: unknown = declaredContainers;
     if (typeof containers === 'string') {
       try {
@@ -64,6 +64,18 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
       }
     }
     if (!Array.isArray(containers)) return [];
+    return containers
+      .map((item: any) => ({
+        name: String(item?.name || '').trim(),
+        count: Number(item?.count ?? 0) || 0,
+        frequency: item?.frequency ? String(item.frequency) : undefined,
+      }))
+      .filter(item => item.name);
+  };
+
+  const buildCompanyWaste = (declaredContainers?: unknown): WasteType[] => {
+    const containers = parseDeclaredContainers(declaredContainers);
+    if (!containers.length) return [];
     const types = new Set<WasteType>();
     containers.forEach((item: any) => {
       if (!item?.name) return;
@@ -101,6 +113,46 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
     const baseWaste = buildWasteList(address, storedWaste);
     if (!Array.isArray(baseWaste)) return [];
     return baseWaste.map((item: any) => ({ ...item, count: 0 }));
+  };
+
+  const getMonthRange = (date = new Date()) => {
+    const start = new Date(date);
+    start.setDate(1);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setMonth(start.getMonth() + 1);
+    return { start, end };
+  };
+
+  const buildDeclaredContainersWithRemaining = (
+    declaredContainers: Array<{ name: string; count: number; frequency?: string }>,
+    collectedByType: Map<string, number>
+  ) => {
+    const declaredByType = new Map<WasteType, number>();
+    declaredContainers.forEach(item => {
+      const mapped = mapDeclaredContainerToType(item.name);
+      if (!mapped) return;
+      declaredByType.set(mapped, (declaredByType.get(mapped) || 0) + (item.count || 0));
+    });
+
+    const remainingByType = new Map<WasteType, number>();
+    declaredByType.forEach((declared, type) => {
+      const collected = collectedByType.get(type) || 0;
+      remainingByType.set(type, Math.max(0, declared - collected));
+    });
+
+    return declaredContainers.map(item => {
+      const mapped = mapDeclaredContainerToType(item.name);
+      if (!mapped) return item;
+      const remainingLeft = remainingByType.get(mapped) || 0;
+      const remainingForItem = Math.min(item.count || 0, remainingLeft);
+      remainingByType.set(mapped, Math.max(0, remainingLeft - remainingForItem));
+      return {
+        ...item,
+        type: mapped,
+        remaining: remainingForItem,
+      };
+    });
   };
 
   const resetRouteIfNeeded = async (route: RouteWithAddresses): Promise<RouteWithAddresses> => {
@@ -294,6 +346,39 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
     if (!routeAddress) {
       return reply.status(404).send({ message: 'Nie znaleziono adresu w trasie' });
     }
+    const declaredContainers = parseDeclaredContainers(routeAddress.address.declaredContainers);
+    let declaredContainersWithRemaining = declaredContainers;
+    if (declaredContainers.length > 0) {
+      const { start, end } = getMonthRange();
+      const logs = await prisma.collectionLog.findMany({
+        where: {
+          addressId,
+          collectedAt: {
+            gte: start,
+            lt: end,
+          },
+        },
+        select: {
+          waste: true,
+        },
+      });
+      const collectedByType = new Map<string, number>();
+      logs.forEach(log => {
+        const waste = log.waste as any;
+        if (!Array.isArray(waste)) return;
+        waste.forEach((item: any) => {
+          if (!item?.id) return;
+          const count = Number(item.count ?? 0) || 0;
+          if (!count) return;
+          collectedByType.set(item.id, (collectedByType.get(item.id) || 0) + count);
+        });
+      });
+      declaredContainersWithRemaining = buildDeclaredContainersWithRemaining(
+        declaredContainers,
+        collectedByType
+      );
+    }
+
     return {
       id: routeAddress.address.id,
       street: routeAddress.address.street,
@@ -311,6 +396,7 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
       issuePhoto: routeAddress.issuePhoto || undefined,
       issueReportedAt: routeAddress.issueReportedAt?.toISOString(),
       ownerName: extractOwnerFromNotes(routeAddress.address.notes),
+      declaredContainers: declaredContainersWithRemaining,
     };
   });
 

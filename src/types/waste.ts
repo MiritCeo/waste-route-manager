@@ -31,6 +31,14 @@ export interface WasteCategory {
   count: number;
 }
 
+export interface DeclaredContainerStatus {
+  name: string;
+  count: number;
+  frequency?: string;
+  type?: WasteType;
+  remaining?: number;
+}
+
 export interface Address {
   id: string;
   street: string;
@@ -45,6 +53,7 @@ export interface Address {
   issueNote?: string;
   issuePhoto?: string;
   ownerName?: string;
+  declaredContainers?: DeclaredContainerStatus[];
 }
 
 export interface Route {

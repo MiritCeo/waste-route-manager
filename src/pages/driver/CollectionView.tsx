@@ -39,6 +39,20 @@ export const CollectionView = () => {
     () => Boolean(address?.notes?.includes('Typ: Firma') || address?.notes?.includes('Właściciel:')),
     [address]
   );
+  const declaredContainers = useMemo(() => {
+    if (!address?.declaredContainers?.length) return [];
+    return address.declaredContainers.map((item, index) => {
+      const option = item.type ? WASTE_OPTIONS.find(entry => entry.id === item.type) : undefined;
+      return {
+        key: `${item.type || item.name}-${index}`,
+        label: option?.name || item.name,
+        icon: option?.icon || '🗑️',
+        count: item.count,
+        remaining: item.remaining,
+        frequency: item.frequency,
+      };
+    });
+  }, [address]);
 
   const expandWasteSelection = (types: WasteType[]) => {
     const expanded = new Set<WasteType>();
@@ -325,6 +339,35 @@ export const CollectionView = () => {
           <div className="bg-card rounded-2xl p-4 border border-border">
             <p className="text-xs text-muted-foreground">Firma</p>
             <p className="text-sm font-semibold text-foreground">{address.ownerName}</p>
+          </div>
+        )}
+        {isCompanyAddress && declaredContainers.length > 0 && (
+          <div className="bg-card rounded-2xl p-4 border border-border space-y-3">
+            <div>
+              <p className="text-sm font-semibold text-foreground">Deklarowane pojemniki</p>
+              <p className="text-xs text-muted-foreground">Miesięcznie - pozostało / zadeklarowane</p>
+            </div>
+            <div className="space-y-2">
+              {declaredContainers.map(item => (
+                <div
+                  key={item.key}
+                  className="flex items-center justify-between rounded-xl border border-border px-3 py-2"
+                >
+                  <div className="flex items-center gap-2 text-sm text-foreground">
+                    <span className="text-base">{item.icon}</span>
+                    <span className="font-medium">{item.label}</span>
+                    {item.frequency && (
+                      <span className="text-xs text-muted-foreground">/ {item.frequency}</span>
+                    )}
+                  </div>
+                  <div className="text-sm font-semibold text-foreground">
+                    {typeof item.remaining === 'number'
+                      ? `${item.remaining} / ${item.count}`
+                      : `${item.count}`}
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
         <div className="bg-card rounded-2xl p-4 border border-border space-y-3">
