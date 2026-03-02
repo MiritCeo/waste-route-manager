@@ -1609,7 +1609,7 @@ export const AddressesManagement = () => {
                                 type="number"
                                 min={0}
                                 step={1}
-                                className="w-24 text-right"
+                                className="w-16 text-right"
                                 value={getDeclaredCountForType(typeId)}
                                 onChange={(event) =>
                                   updateDeclaredCountForType(
