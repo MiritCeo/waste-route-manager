@@ -1,14 +1,14 @@
 import { FastifyInstance } from 'fastify';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db.js';
-import { buildWasteCategories, WasteType } from '../utils/waste.js';
+import { buildWasteCategories, WasteType, WASTE_OPTIONS } from '../utils/waste.js';
 import { DEFAULT_ISSUE_CONFIG } from '../utils/issueConfig.js';
 
 export const registerDriverRoutes = (app: FastifyInstance) => {
   type RouteWithAddresses = Prisma.RouteGetPayload<{
     include: { routeAddresses: { include: { address: true } } };
   }>;
-  type DeclaredContainer = { name: string; count: number; frequency?: string };
+  type DeclaredContainer = { name: string; count: number; frequency?: string; type?: WasteType };
   type DeclaredContainerWithRemaining = DeclaredContainer & {
     type?: WasteType;
     remaining?: number;
@@ -59,6 +59,9 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
     return base as WasteType;
   };
 
+  const isWasteType = (value?: string): value is WasteType =>
+    Boolean(value && WASTE_OPTIONS.some(option => option.id === value));
+
   const parseDeclaredContainers = (declaredContainers?: unknown): DeclaredContainer[] => {
     let containers: unknown = declaredContainers;
     if (typeof containers === 'string') {
@@ -74,6 +77,7 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
         name: String(item?.name || '').trim(),
         count: Number(item?.count ?? 0) || 0,
         frequency: item?.frequency ? String(item.frequency) : undefined,
+        type: isWasteType(item?.type) ? item.type : undefined,
       }))
       .filter(item => item.name);
   };
@@ -84,7 +88,7 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
     const types = new Set<WasteType>();
     containers.forEach((item: any) => {
       if (!item?.name) return;
-      const mapped = mapDeclaredContainerToType(String(item.name));
+      const mapped = item?.type ? (item.type as WasteType) : mapDeclaredContainerToType(String(item.name));
       if (mapped) types.add(mapped);
     });
     return Array.from(types);
@@ -135,7 +139,7 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
   ): DeclaredContainerWithRemaining[] => {
     const declaredByType = new Map<WasteType, number>();
     declaredContainers.forEach(item => {
-      const mapped = mapDeclaredContainerToType(item.name);
+      const mapped = item.type ?? mapDeclaredContainerToType(item.name);
       if (!mapped) return;
       declaredByType.set(mapped, (declaredByType.get(mapped) || 0) + (item.count || 0));
     });
@@ -147,7 +151,7 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
     });
 
     return declaredContainers.map(item => {
-      const mapped = mapDeclaredContainerToType(item.name);
+      const mapped = item.type ?? mapDeclaredContainerToType(item.name);
       if (!mapped) return item;
       const remainingLeft = remainingByType.get(mapped) || 0;
       const remainingForItem = Math.min(item.count || 0, remainingLeft);

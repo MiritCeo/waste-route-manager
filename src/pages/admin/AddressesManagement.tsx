@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
-import { useFieldArray, useForm } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Header } from '@/components/Header';
 import { AdminHeaderRight } from '@/components/AdminHeaderRight';
@@ -126,10 +126,6 @@ export const AddressesManagement = () => {
       declaredContainers: [],
       active: true,
     },
-  });
-  const declaredContainersFieldArray = useFieldArray({
-    control: form.control,
-    name: 'declaredContainers',
   });
 
   useEffect(() => {
@@ -429,10 +425,41 @@ export const AddressesManagement = () => {
 
   const notesValue = form.watch('notes');
   const declaredContainersValue = form.watch('declaredContainers');
+  const selectedWasteTypes = form.watch('wasteTypes');
   const showDeclaredContainers =
-    Boolean(declaredContainersValue?.length) ||
     Boolean(notesValue?.includes('Typ: Firma') || notesValue?.includes('Właściciel:')) ||
     Boolean(editingAddress && isCompanyAddress(editingAddress));
+
+  const getDeclaredCountForType = (typeId: WasteType) => {
+    const option = WASTE_OPTIONS.find(item => item.id === typeId);
+    if (!option) return 0;
+    const entry = declaredContainersValue?.find(
+      item => item.type === typeId || item.name === option.name
+    );
+    return entry?.count ?? 0;
+  };
+
+  const updateDeclaredCountForType = (typeId: WasteType, nextValue: number) => {
+    const option = WASTE_OPTIONS.find(item => item.id === typeId);
+    if (!option) return;
+    const current = declaredContainersValue ? [...declaredContainersValue] : [];
+    const index = current.findIndex(item => item.type === typeId || item.name === option.name);
+    if (nextValue <= 0) {
+      if (index !== -1) {
+        current.splice(index, 1);
+      }
+    } else if (index === -1) {
+      current.push({ type: typeId, name: option.name, count: nextValue });
+    } else {
+      current[index] = {
+        ...current[index],
+        type: typeId,
+        name: option.name,
+        count: nextValue,
+      };
+    }
+    form.setValue('declaredContainers', current, { shouldDirty: true });
+  };
 
   const getNoteValue = (notes: string | undefined, prefix: string) => {
     if (!notes) return '';
@@ -646,13 +673,22 @@ export const AddressesManagement = () => {
 
   const handleSubmit = async (values: AddressFormValues) => {
     try {
-      const declaredContainers = (values.declaredContainers || [])
-        .map(item => ({
-          name: item.name?.trim() || '',
-          count: Number(item.count ?? 0) || 0,
-          frequency: item.frequency?.trim() || undefined,
-        }))
-        .filter(item => item.name);
+      const declaredContainers = values.wasteTypes
+        .map(typeId => {
+          const option = WASTE_OPTIONS.find(item => item.id === typeId);
+          const entry = values.declaredContainers?.find(
+            item => item.type === typeId || item.name === option?.name
+          );
+          const count = Number(entry?.count ?? 0) || 0;
+          if (!option || count <= 0) return null;
+          return {
+            type: typeId,
+            name: option.name,
+            count,
+            frequency: entry?.frequency?.trim() || undefined,
+          };
+        })
+        .filter(Boolean);
       if (editingAddress) {
         await adminService.updateAddress(editingAddress.id, {
           street: values.street,
@@ -1422,55 +1458,44 @@ export const AddressesManagement = () => {
 
               {showDeclaredContainers && (
                 <div className="rounded-2xl border border-border bg-muted/20 p-4 space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold text-foreground">Deklarowane pojemniki (firmy)</p>
-                      <p className="text-xs text-muted-foreground">Możesz ręcznie poprawić ilości.</p>
-                    </div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => declaredContainersFieldArray.append({ name: '', count: 0, frequency: '' })}
-                      className="gap-2"
-                    >
-                      <Plus className="w-4 h-4" />
-                      Dodaj
-                    </Button>
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">Deklarowane pojemniki (firmy)</p>
+                    <p className="text-xs text-muted-foreground">
+                      Ustaw ilości tylko dla typów wybranych powyżej.
+                    </p>
                   </div>
-                  {declaredContainersFieldArray.fields.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">Brak deklaracji.</p>
+                  {selectedWasteTypes.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Najpierw wybierz typy odpadów.</p>
                   ) : (
-                    <div className="space-y-2">
-                      {declaredContainersFieldArray.fields.map((item, index) => (
-                        <div key={item.id} className="grid gap-2 md:grid-cols-[2fr_1fr_1fr_auto]">
-                          <Input
-                            placeholder="Pojemnik / worek (np. popiół 120L)"
-                            {...form.register(`declaredContainers.${index}.name`)}
-                          />
-                          <Input
-                            type="number"
-                            min={0}
-                            step={1}
-                            placeholder="Ilość"
-                            {...form.register(`declaredContainers.${index}.count`, {
-                              valueAsNumber: true,
-                            })}
-                          />
-                          <Input
-                            placeholder="Częstotliwość (opcjonalnie)"
-                            {...form.register(`declaredContainers.${index}.frequency`)}
-                          />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => declaredContainersFieldArray.remove(index)}
+                    <div className="grid gap-2 md:grid-cols-2">
+                      {selectedWasteTypes.map(typeId => {
+                        const option = WASTE_OPTIONS.find(item => item.id === typeId);
+                        if (!option) return null;
+                        return (
+                          <label
+                            key={typeId}
+                            className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background px-3 py-2 text-sm"
                           >
-                            <Trash2 className="w-4 h-4 text-muted-foreground" />
-                          </Button>
-                        </div>
-                      ))}
+                            <span className="flex items-center gap-2 text-foreground">
+                              <span>{option.icon}</span>
+                              {option.name}
+                            </span>
+                            <Input
+                              type="number"
+                              min={0}
+                              step={1}
+                              className="w-24 text-right"
+                              value={getDeclaredCountForType(typeId)}
+                              onChange={(event) =>
+                                updateDeclaredCountForType(
+                                  typeId,
+                                  Number(event.target.value || 0)
+                                )
+                              }
+                            />
+                          </label>
+                        );
+                      })}
                     </div>
                   )}
                 </div>

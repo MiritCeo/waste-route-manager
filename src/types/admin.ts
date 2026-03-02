@@ -204,6 +204,7 @@ export interface DeclaredContainer {
   name: string;
   count: number;
   frequency?: string;
+  type?: WasteType;
 }
 
 export interface ImportAddressesResult {
