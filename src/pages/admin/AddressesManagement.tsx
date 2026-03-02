@@ -1557,7 +1557,7 @@ export const AddressesManagement = () => {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Typy odpadów</FormLabel>
-                      <div className="grid gap-2 md:grid-cols-2">
+                      <div className="grid gap-2 grid-cols-2">
                         {visibleWasteOptions.map(option => {
                           const isChecked = field.value.includes(option.id);
                           return (
