@@ -1434,196 +1434,200 @@ export const AddressesManagement = () => {
           </DialogHeader>
 
           <Form {...form}>
-            <form className="grid gap-4" onSubmit={form.handleSubmit(handleSubmit)}>
-              <div className="grid gap-3 md:grid-cols-2">
+            <form className="grid gap-4 md:grid-cols-2" onSubmit={form.handleSubmit(handleSubmit)}>
+              <div className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="street"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Ulica</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="number"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Numer</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="city"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Miasto</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="postalCode"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Kod pocztowy</FormLabel>
+                        <FormControl>
+                          <Input {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
                 <FormField
                   control={form.control}
-                  name="street"
+                  name="notes"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Ulica</FormLabel>
+                      <FormLabel>Notatki</FormLabel>
                       <FormControl>
-                        <Input {...field} />
+                        <Textarea {...field} rows={2} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+
                 <FormField
                   control={form.control}
-                  name="number"
+                  name="composting"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Numer</FormLabel>
+                      <FormLabel>Kompostownik</FormLabel>
                       <FormControl>
-                        <Input {...field} />
+                        <Select
+                          value={field.value ? field.value : 'unknown'}
+                          onValueChange={(value) =>
+                            field.onChange(value === 'unknown' ? '' : value)
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Wybierz wartość" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="unknown">Brak danych</SelectItem>
+                            <SelectItem value="Tak">Tak</SelectItem>
+                            <SelectItem value="Nie">Nie</SelectItem>
+                          </SelectContent>
+                        </Select>
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+
                 <FormField
                   control={form.control}
-                  name="city"
+                  name="active"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Miasto</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="postalCode"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Kod pocztowy</FormLabel>
-                      <FormControl>
-                        <Input {...field} />
-                      </FormControl>
-                      <FormMessage />
+                      <label className="flex items-center gap-2 text-sm">
+                        <Checkbox
+                          checked={field.value}
+                          onCheckedChange={(checked) => field.onChange(Boolean(checked))}
+                        />
+                        Adres aktywny
+                      </label>
                     </FormItem>
                   )}
                 />
               </div>
 
-              <FormField
-                control={form.control}
-                name="notes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Notatki</FormLabel>
-                    <FormControl>
-                      <Textarea {...field} rows={3} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              {showDeclaredContainers && (
-                <div className="rounded-2xl border border-border bg-muted/20 p-4 space-y-3">
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">Deklarowane pojemniki (firmy)</p>
-                    <p className="text-xs text-muted-foreground">
-                      Ustaw ilości tylko dla typów wybranych powyżej.
-                    </p>
-                  </div>
-                  {selectedWasteTypes.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">Najpierw wybierz typy odpadów.</p>
-                  ) : (
-                    <div className="grid gap-2 md:grid-cols-2">
-                      {selectedWasteTypes.map(typeId => {
-                        const option = WASTE_OPTIONS.find(item => item.id === typeId);
-                        if (!option) return null;
-                        return (
-                          <label
-                            key={typeId}
-                            className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background px-3 py-2 text-sm"
-                          >
-                            <span className="flex items-center gap-2 text-foreground">
-                              <span>{option.icon}</span>
-                              {option.name}
-                            </span>
-                            <Input
-                              type="number"
-                              min={0}
-                              step={1}
-                              className="w-24 text-right"
-                              value={getDeclaredCountForType(typeId)}
-                              onChange={(event) =>
-                                updateDeclaredCountForType(
-                                  typeId,
-                                  Number(event.target.value || 0)
-                                )
-                              }
-                            />
-                          </label>
-                        );
-                      })}
-                    </div>
+              <div className="space-y-4">
+                <FormField
+                  control={form.control}
+                  name="wasteTypes"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Typy odpadów</FormLabel>
+                      <div className="grid gap-2 md:grid-cols-2">
+                        {visibleWasteOptions.map(option => {
+                          const isChecked = field.value.includes(option.id);
+                          return (
+                            <label key={option.id} className="flex items-center gap-2 text-sm">
+                              <Checkbox
+                                checked={isChecked}
+                                onCheckedChange={(checked) => {
+                                  const nextValue = checked
+                                    ? [...field.value, option.id]
+                                    : field.value.filter(type => type !== option.id);
+                                  field.onChange(nextValue);
+                                }}
+                              />
+                              {option.icon} {option.name}
+                            </label>
+                          );
+                        })}
+                      </div>
+                      <FormMessage />
+                    </FormItem>
                   )}
-                </div>
-              )}
+                />
 
-              <FormField
-                control={form.control}
-                name="composting"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Kompostownik</FormLabel>
-                    <FormControl>
-                      <Select
-                        value={field.value ? field.value : 'unknown'}
-                        onValueChange={(value) =>
-                          field.onChange(value === 'unknown' ? '' : value)
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Wybierz wartość" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="unknown">Brak danych</SelectItem>
-                          <SelectItem value="Tak">Tak</SelectItem>
-                          <SelectItem value="Nie">Nie</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-
-              <FormField
-                control={form.control}
-                name="wasteTypes"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Typy odpadów</FormLabel>
-                    <div className="grid gap-2 md:grid-cols-2">
-                      {visibleWasteOptions.map(option => {
-                        const isChecked = field.value.includes(option.id);
-                        return (
-                          <label key={option.id} className="flex items-center gap-2 text-sm">
-                            <Checkbox
-                              checked={isChecked}
-                              onCheckedChange={(checked) => {
-                                const nextValue = checked
-                                  ? [...field.value, option.id]
-                                  : field.value.filter(type => type !== option.id);
-                                field.onChange(nextValue);
-                              }}
-                            />
-                            {option.icon} {option.name}
-                          </label>
-                        );
-                      })}
+                {showDeclaredContainers && (
+                  <div className="rounded-2xl border border-border bg-muted/20 p-4 space-y-3">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">Deklarowane pojemniki (firmy)</p>
+                      <p className="text-xs text-muted-foreground">
+                        Ustaw ilości tylko dla typów wybranych powyżej.
+                      </p>
                     </div>
-                    <FormMessage />
-                  </FormItem>
+                    {selectedWasteTypes.length === 0 ? (
+                      <p className="text-xs text-muted-foreground">Najpierw wybierz typy odpadów.</p>
+                    ) : (
+                      <div className="grid gap-2 md:grid-cols-2">
+                        {selectedWasteTypes.map(typeId => {
+                          const option = WASTE_OPTIONS.find(item => item.id === typeId);
+                          if (!option) return null;
+                          return (
+                            <label
+                              key={typeId}
+                              className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background px-3 py-2 text-sm"
+                            >
+                              <span className="flex items-center gap-2 text-foreground">
+                                <span>{option.icon}</span>
+                                {option.name}
+                              </span>
+                              <Input
+                                type="number"
+                                min={0}
+                                step={1}
+                                className="w-24 text-right"
+                                value={getDeclaredCountForType(typeId)}
+                                onChange={(event) =>
+                                  updateDeclaredCountForType(
+                                    typeId,
+                                    Number(event.target.value || 0)
+                                  )
+                                }
+                              />
+                            </label>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
                 )}
-              />
+              </div>
 
-              <FormField
-                control={form.control}
-                name="active"
-                render={({ field }) => (
-                  <FormItem>
-                    <label className="flex items-center gap-2 text-sm">
-                      <Checkbox
-                        checked={field.value}
-                        onCheckedChange={(checked) => field.onChange(Boolean(checked))}
-                      />
-                      Adres aktywny
-                    </label>
-                  </FormItem>
-                )}
-              />
-
-              <DialogFooter>
+              <DialogFooter className="md:col-span-2">
                 <Button variant="outline" type="button" onClick={() => setIsDialogOpen(false)}>
                   Anuluj
                 </Button>
