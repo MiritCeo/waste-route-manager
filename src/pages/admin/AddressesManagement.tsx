@@ -423,6 +423,40 @@ export const AddressesManagement = () => {
   const isCompanyAddress = (address: AdminAddress) =>
     Boolean(address.notes?.includes('Typ: Firma') || address.notes?.includes('Właściciel:'));
 
+  const mapDeclaredNameToType = (name?: string): WasteType | null => {
+    if (!name) return null;
+    const normalized = name.toLowerCase();
+    let base:
+      | 'mixed'
+      | 'bio-green'
+      | 'bio-kitchen'
+      | 'paper'
+      | 'plastic'
+      | 'glass-clear'
+      | 'glass-colored'
+      | 'ash'
+      | null = null;
+
+    if (normalized.includes('resztkowe') || normalized.includes('zmiesz')) base = 'mixed';
+    if (normalized.includes('bio')) {
+      base = normalized.includes('kuchen') ? 'bio-kitchen' : 'bio-green';
+    }
+    if (normalized.includes('papier')) base = 'paper';
+    if (normalized.includes('plastik') || normalized.includes('metal')) base = 'plastic';
+    if (normalized.includes('szkło') || normalized.includes('szklo')) {
+      base = normalized.includes('bezbarw') ? 'glass-clear' : 'glass-colored';
+    }
+    if (normalized.includes('popiół') || normalized.includes('popiol')) base = 'ash';
+
+    if (!base) return null;
+    const sizeMatch = normalized.match(/\b(\d{2,4})\s*l\b|\b(\d{2,4})l\b/);
+    const sizeValue = sizeMatch?.[1] || sizeMatch?.[2];
+    const size = sizeValue ? Number(sizeValue) : undefined;
+    if (size === 1100) return `${base}-1100` as WasteType;
+    if (size === 240) return `${base}-240` as WasteType;
+    return base as WasteType;
+  };
+
   const notesValue = form.watch('notes');
   const declaredContainersValue = form.watch('declaredContainers');
   const selectedWasteTypes = form.watch('wasteTypes');
@@ -434,7 +468,10 @@ export const AddressesManagement = () => {
     const option = WASTE_OPTIONS.find(item => item.id === typeId);
     if (!option) return 0;
     const entry = declaredContainersValue?.find(
-      item => item.type === typeId || item.name === option.name
+      item =>
+        item.type === typeId ||
+        item.name === option.name ||
+        mapDeclaredNameToType(item.name) === typeId
     );
     return entry?.count ?? 0;
   };
@@ -657,6 +694,17 @@ export const AddressesManagement = () => {
 
   const handleOpenEdit = (address: AdminAddress) => {
     setEditingAddress(address);
+    const normalizedDeclared =
+      address.declaredContainers?.map(item => {
+        const mappedType = item.type ?? mapDeclaredNameToType(item.name);
+        if (!mappedType) return item;
+        const option = WASTE_OPTIONS.find(optionItem => optionItem.id === mappedType);
+        return {
+          ...item,
+          type: mappedType,
+          name: option?.name || item.name,
+        };
+      }) || [];
     form.reset({
       street: address.street,
       number: address.number,
@@ -665,7 +713,7 @@ export const AddressesManagement = () => {
       notes: address.notes || '',
       composting: address.composting || '',
       wasteTypes: address.wasteTypes,
-      declaredContainers: address.declaredContainers || [],
+      declaredContainers: normalizedDeclared,
       active: address.active,
     });
     setIsDialogOpen(true);
@@ -1377,7 +1425,7 @@ export const AddressesManagement = () => {
       </main>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-5xl">
           <DialogHeader>
             <DialogTitle>{editingAddress ? 'Edytuj adres' : 'Dodaj adres'}</DialogTitle>
             <DialogDescription>
