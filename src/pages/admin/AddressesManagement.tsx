@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { z } from 'zod';
-import { useForm } from 'react-hook-form';
+import { useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Header } from '@/components/Header';
 import { AdminHeaderRight } from '@/components/AdminHeaderRight';
@@ -53,6 +53,16 @@ const addressSchema = z.object({
   notes: z.string().optional().or(z.literal('')),
   composting: z.string().optional().or(z.literal('')),
   wasteTypes: z.array(wasteEnum).min(1, 'Wybierz przynajmniej jeden typ odpadu'),
+  declaredContainers: z
+    .array(
+      z.object({
+        name: z.string().optional().or(z.literal('')),
+        count: z.coerce.number().min(0),
+        frequency: z.string().optional().or(z.literal('')),
+      })
+    )
+    .optional()
+    .default([]),
   active: z.boolean(),
 });
 
@@ -113,8 +123,13 @@ export const AddressesManagement = () => {
         'bio-kitchen',
         'bio-kitchen-240',
       ],
+      declaredContainers: [],
       active: true,
     },
+  });
+  const declaredContainersFieldArray = useFieldArray({
+    control: form.control,
+    name: 'declaredContainers',
   });
 
   useEffect(() => {
@@ -412,6 +427,13 @@ export const AddressesManagement = () => {
   const isCompanyAddress = (address: AdminAddress) =>
     Boolean(address.notes?.includes('Typ: Firma') || address.notes?.includes('Właściciel:'));
 
+  const notesValue = form.watch('notes');
+  const declaredContainersValue = form.watch('declaredContainers');
+  const showDeclaredContainers =
+    Boolean(declaredContainersValue?.length) ||
+    Boolean(notesValue?.includes('Typ: Firma') || notesValue?.includes('Właściciel:')) ||
+    Boolean(editingAddress && isCompanyAddress(editingAddress));
+
   const getNoteValue = (notes: string | undefined, prefix: string) => {
     if (!notes) return '';
     const line = notes.split('\n').find(item => item.trim().startsWith(prefix));
@@ -591,6 +613,7 @@ export const AddressesManagement = () => {
       city: '',
       postalCode: '',
       notes: '',
+      composting: '',
       wasteTypes: [
         'mixed',
         'mixed-240',
@@ -599,6 +622,7 @@ export const AddressesManagement = () => {
         'bio-kitchen',
         'bio-kitchen-240',
       ],
+      declaredContainers: [],
       active: true,
     });
     setIsDialogOpen(true);
@@ -614,6 +638,7 @@ export const AddressesManagement = () => {
       notes: address.notes || '',
       composting: address.composting || '',
       wasteTypes: address.wasteTypes,
+      declaredContainers: address.declaredContainers || [],
       active: address.active,
     });
     setIsDialogOpen(true);
@@ -621,6 +646,13 @@ export const AddressesManagement = () => {
 
   const handleSubmit = async (values: AddressFormValues) => {
     try {
+      const declaredContainers = (values.declaredContainers || [])
+        .map(item => ({
+          name: item.name?.trim() || '',
+          count: Number(item.count ?? 0) || 0,
+          frequency: item.frequency?.trim() || undefined,
+        }))
+        .filter(item => item.name);
       if (editingAddress) {
         await adminService.updateAddress(editingAddress.id, {
           street: values.street,
@@ -630,6 +662,7 @@ export const AddressesManagement = () => {
           notes: values.notes || undefined,
           composting: values.composting || undefined,
           wasteTypes: values.wasteTypes,
+          declaredContainers,
           active: values.active,
         });
         toast.success('Zaktualizowano adres');
@@ -642,6 +675,7 @@ export const AddressesManagement = () => {
           notes: values.notes || undefined,
           composting: values.composting || undefined,
           wasteTypes: values.wasteTypes,
+          declaredContainers,
           active: values.active,
         });
         toast.success('Dodano adres');
@@ -1385,6 +1419,62 @@ export const AddressesManagement = () => {
                   </FormItem>
                 )}
               />
+
+              {showDeclaredContainers && (
+                <div className="rounded-2xl border border-border bg-muted/20 p-4 space-y-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">Deklarowane pojemniki (firmy)</p>
+                      <p className="text-xs text-muted-foreground">Możesz ręcznie poprawić ilości.</p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => declaredContainersFieldArray.append({ name: '', count: 0, frequency: '' })}
+                      className="gap-2"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Dodaj
+                    </Button>
+                  </div>
+                  {declaredContainersFieldArray.fields.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Brak deklaracji.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {declaredContainersFieldArray.fields.map((item, index) => (
+                        <div key={item.id} className="grid gap-2 md:grid-cols-[2fr_1fr_1fr_auto]">
+                          <Input
+                            placeholder="Pojemnik / worek (np. popiół 120L)"
+                            {...form.register(`declaredContainers.${index}.name`)}
+                          />
+                          <Input
+                            type="number"
+                            min={0}
+                            step={1}
+                            placeholder="Ilość"
+                            {...form.register(`declaredContainers.${index}.count`, {
+                              valueAsNumber: true,
+                            })}
+                          />
+                          <Input
+                            placeholder="Częstotliwość (opcjonalnie)"
+                            {...form.register(`declaredContainers.${index}.frequency`)}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => declaredContainersFieldArray.remove(index)}
+                          >
+                            <Trash2 className="w-4 h-4 text-muted-foreground" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
 
               <FormField
                 control={form.control}
