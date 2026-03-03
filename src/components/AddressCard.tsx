@@ -71,12 +71,19 @@ export const AddressCard = memo(({ address, hasDraft, onSelect, className }: Add
 
       {/* Address Info */}
       <div className="flex-1 text-left min-w-0">
-        <h3 className={cn(
-          'text-lg font-bold truncate',
-          isCollected ? 'text-success' : isIssue ? 'text-destructive' : 'text-foreground'
-        )}>
-          {address.street} {address.number}
-        </h3>
+        <div className="flex items-center justify-between gap-2">
+          <h3 className={cn(
+            'text-lg font-bold truncate',
+            isCollected ? 'text-success' : isIssue ? 'text-destructive' : 'text-foreground'
+          )}>
+            {address.street} {address.number}
+          </h3>
+          {isCompany && address.ownerName && (
+            <span className="text-xs font-medium text-muted-foreground truncate max-w-[40%]">
+              {address.ownerName}
+            </span>
+          )}
+        </div>
         <p className="text-sm text-muted-foreground">{address.city}</p>
         <div className="flex items-center gap-2 mt-2">
           <span className={cn(
