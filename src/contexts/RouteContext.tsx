@@ -3,7 +3,6 @@ import {
   Route,
   Address,
   WasteCategory,
-  WasteType,
   AddressStatus,
   AddressIssueReason,
   AddressIssueFlag,
@@ -19,7 +18,7 @@ interface RouteContextType {
   isLoading: boolean;
   error: string | null;
   selectedRoute: Route | null;
-  selectedWasteTypes: WasteType[];
+  selectedWasteTypes: string[];
   syncQueueCount: number;
   hasCollectionDraft: (routeId: string, addressId: string) => boolean;
   getCollectionDraft: (routeId: string, addressId: string) => CollectionDraft | null;
@@ -34,7 +33,7 @@ interface RouteContextType {
     details?: CollectionDetails
   ) => Promise<void>;
   setSelectedRoute: (route: Route | null) => void;
-  setSelectedWasteTypes: (types: WasteType[]) => void;
+  setSelectedWasteTypes: (types: string[]) => void;
   refreshRoute: (routeId: string) => Promise<void>;
 }
 
@@ -45,7 +44,7 @@ interface CollectionDetails {
   issueNote?: string;
   issuePhoto?: string;
   issuePhotoFile?: File;
-  selectedWasteTypes?: WasteType[];
+  selectedWasteTypes?: string[];
 }
 
 interface CollectionDraft extends CollectionDetails {
@@ -71,7 +70,7 @@ const RouteContext = createContext<RouteContextType | undefined>(undefined);
 export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [routes, setRoutes] = useState<Route[]>([]);
   const [selectedRoute, setSelectedRoute] = useState<Route | null>(null);
-  const [selectedWasteTypes, setSelectedWasteTypesState] = useState<WasteType[]>([]);
+  const [selectedWasteTypes, setSelectedWasteTypesState] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [syncQueueCount, setSyncQueueCount] = useState(0);
@@ -179,7 +178,7 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   }, [isAuthenticated]);
 
   useEffect(() => {
-    const stored = storage.get<{ date: string; types: WasteType[] }>(
+    const stored = storage.get<{ date: string; types: string[] }>(
       APP_CONFIG.STORAGE.WASTE_SELECTION_KEY
     );
     if (!stored) return;
@@ -368,7 +367,7 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       issueFlags?: AddressIssueFlag[];
       issueNote?: string;
       issuePhoto?: string;
-      collectedWasteTypes?: WasteType[];
+      collectedWasteTypes?: string[];
     }
   ) => {
     const key = `${routeId}:${addressId}`;
@@ -519,7 +518,7 @@ export const RouteProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     }
   };
 
-  const setSelectedWasteTypes = (types: WasteType[]) => {
+  const setSelectedWasteTypes = (types: string[]) => {
     setSelectedWasteTypesState(types);
     if (types.length === 0) {
       storage.remove(APP_CONFIG.STORAGE.WASTE_SELECTION_KEY);

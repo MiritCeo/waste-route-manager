@@ -1,6 +1,5 @@
 import { QueryParams } from '@/types/api';
 import { DeclaredContainer } from '@/types/admin';
-import { WasteType } from '@/types/waste';
 import { Permission, UserRole } from '@/types/user';
 
 export interface AdminEmployeesQuery extends QueryParams {
@@ -66,7 +65,7 @@ export interface AdminAddressDto {
   city: string;
   postalCode?: string;
   notes?: string;
-  wasteTypes: WasteType[];
+  wasteTypes: string[];
   active: boolean;
   createdAt: string;
 }
@@ -110,7 +109,7 @@ export interface CreateAddressDto {
   postalCode?: string;
   notes?: string;
   composting?: string;
-  wasteTypes: WasteType[];
+  wasteTypes: string[];
   declaredContainers?: DeclaredContainer[];
   active?: boolean;
 }
@@ -122,7 +121,7 @@ export interface UpdateAddressDto {
   postalCode?: string;
   notes?: string;
   composting?: string;
-  wasteTypes?: WasteType[];
+  wasteTypes?: string[];
   declaredContainers?: DeclaredContainer[];
   active?: boolean;
 }

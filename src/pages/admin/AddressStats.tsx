@@ -6,12 +6,13 @@ import { Button } from '@/components/ui/button';
 import { adminService } from '@/api/services/admin.service';
 import { AddressStats as AddressStatsType } from '@/types/admin';
 import { ROUTES } from '@/constants/routes';
-import { WASTE_OPTIONS } from '@/constants/waste';
+import { useWasteOptions } from '@/hooks/useWasteOptions';
 import { toast } from 'sonner';
 
 export const AddressStats = () => {
   const { addressId } = useParams<{ addressId: string }>();
   const navigate = useNavigate();
+  const { getLabel } = useWasteOptions();
   const [stats, setStats] = useState<AddressStatsType | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +40,7 @@ export const AddressStats = () => {
     loadStats();
   }, [addressId]);
 
-  const getWasteLabel = (id: string) => WASTE_OPTIONS.find(option => option.id === id)?.name || id;
+  const getWasteLabel = (id: string) => getLabel(id);
 
   return (
     <div className="min-h-screen bg-background">

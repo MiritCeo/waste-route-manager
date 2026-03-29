@@ -3,7 +3,7 @@ import { Header } from '@/components/Header';
 import { AdminHeaderRight } from '@/components/AdminHeaderRight';
 import { adminService } from '@/api/services/admin.service';
 import { DailyStatsRow } from '@/types/admin';
-import { WASTE_OPTIONS } from '@/constants/waste';
+import { useWasteOptions } from '@/hooks/useWasteOptions';
 import {
   Select,
   SelectContent,
@@ -31,8 +31,9 @@ const getDefaultMonth = () => new Date().toISOString().slice(0, 7);
 
 export const DailyStats = () => {
   const navigate = useNavigate();
+  const { options: wasteColumns } = useWasteOptions();
   const [month, setMonth] = useState(getDefaultMonth());
-  const [wasteType, setWasteType] = useState<'ALL' | (typeof WASTE_OPTIONS)[number]['id']>('ALL');
+  const [wasteType, setWasteType] = useState<'ALL' | string>('ALL');
   const [isLoading, setIsLoading] = useState(true);
   const [rows, setRows] = useState<DailyStatsRow[]>([]);
 
@@ -68,12 +69,12 @@ export const DailyStats = () => {
     const totalWaste = rows.reduce((sum, row) => sum + row.totalWaste, 0);
     const totalCollected = rows.reduce((sum, row) => sum + row.collectedAddresses, 0);
     const avgWaste = rows.length > 0 ? Math.round(totalWaste / rows.length) : 0;
-    const byTypeTotals = WASTE_OPTIONS.reduce<Record<string, number>>((acc, option) => {
+    const byTypeTotals = wasteColumns.reduce<Record<string, number>>((acc, option) => {
       acc[option.id] = rows.reduce((sum, row) => sum + (row.byType?.[option.id] || 0), 0);
       return acc;
     }, {});
     return { totalWaste, totalCollected, avgWaste, byTypeTotals };
-  }, [rows]);
+  }, [rows, wasteColumns]);
 
   return (
     <div className="min-h-screen bg-background">
@@ -110,13 +111,13 @@ export const DailyStats = () => {
               className="pl-9"
             />
           </div>
-          <Select value={wasteType} onValueChange={(value) => setWasteType(value as typeof wasteType)}>
+          <Select value={wasteType} onValueChange={(value) => setWasteType(value)}>
             <SelectTrigger className="w-full md:w-64">
               <SelectValue placeholder="Typ odpadu" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="ALL">Wszystkie typy</SelectItem>
-              {WASTE_OPTIONS.map(option => (
+              {wasteColumns.map(option => (
                 <SelectItem key={option.id} value={option.id}>
                   {option.name}
                 </SelectItem>
@@ -134,7 +135,7 @@ export const DailyStats = () => {
               <TableRow>
                 <TableHead>Data</TableHead>
                 <TableHead>Odebrane adresy</TableHead>
-                {WASTE_OPTIONS.map(option => (
+                {wasteColumns.map(option => (
                   <TableHead key={option.id}>{option.name}</TableHead>
                 ))}
                 <TableHead>Łącznie</TableHead>
@@ -144,14 +145,14 @@ export const DailyStats = () => {
             <TableBody>
               {isLoading && (
                 <TableRow>
-                <TableCell colSpan={6 + WASTE_OPTIONS.length} className="text-muted-foreground">
+                <TableCell colSpan={4 + wasteColumns.length} className="text-muted-foreground">
                     Ładowanie danych...
                   </TableCell>
                 </TableRow>
               )}
               {!isLoading && enrichedRows.length === 0 && (
                 <TableRow>
-                <TableCell colSpan={6 + WASTE_OPTIONS.length} className="text-muted-foreground">
+                <TableCell colSpan={4 + wasteColumns.length} className="text-muted-foreground">
                     Brak danych dla wybranego okresu
                   </TableCell>
                 </TableRow>
@@ -162,7 +163,7 @@ export const DailyStats = () => {
                     {new Date(row.date).toLocaleDateString('pl-PL')}
                   </TableCell>
                   <TableCell>{row.collectedAddresses}</TableCell>
-                  {WASTE_OPTIONS.map(option => (
+                  {wasteColumns.map(option => (
                     <TableCell key={option.id}>
                       {row.byType?.[option.id] ?? 0}
                     </TableCell>
@@ -186,7 +187,7 @@ export const DailyStats = () => {
                 <TableRow>
                   <TableCell>Podsumowanie</TableCell>
                   <TableCell>{summary.totalCollected}</TableCell>
-                  {WASTE_OPTIONS.map(option => (
+                  {wasteColumns.map(option => (
                     <TableCell key={option.id}>
                       {summary.byTypeTotals[option.id] ?? 0}
                     </TableCell>

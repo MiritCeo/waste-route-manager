@@ -25,7 +25,7 @@ export type AddressIssueReason = string;
 export type AddressIssueFlag = string;
 
 export interface WasteCategory {
-  id: WasteType;
+  id: string;
   name: string;
   icon: string;
   count: number;
@@ -35,7 +35,7 @@ export interface DeclaredContainerStatus {
   name: string;
   count: number;
   frequency?: string;
-  type?: WasteType;
+  type?: string;
   remaining?: number;
 }
 
@@ -47,7 +47,7 @@ export interface Address {
   isCollected: boolean;
   waste?: WasteCategory[];
   status?: AddressStatus;
-  collectedWasteTypes?: WasteType[];
+  collectedWasteTypes?: string[];
   issueReason?: AddressIssueReason;
   issueFlags?: AddressIssueFlag[];
   issueNote?: string;

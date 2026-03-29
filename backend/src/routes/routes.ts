@@ -1,16 +1,21 @@
 import { FastifyInstance } from 'fastify';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../db.js';
-import { buildWasteCategories, WasteType, WASTE_OPTIONS } from '../utils/waste.js';
+import {
+  buildWasteCategoriesFromMap,
+  getWasteDefinitionMap,
+  WasteType,
+  WASTE_OPTIONS,
+} from '../utils/waste.js';
 import { DEFAULT_ISSUE_CONFIG } from '../utils/issueConfig.js';
 
 export const registerDriverRoutes = (app: FastifyInstance) => {
   type RouteWithAddresses = Prisma.RouteGetPayload<{
     include: { routeAddresses: { include: { address: true } } };
   }>;
-  type DeclaredContainer = { name: string; count: number; frequency?: string; type?: WasteType };
+  type DeclaredContainer = { name: string; count: number; frequency?: string; type?: string };
   type DeclaredContainerWithRemaining = DeclaredContainer & {
-    type?: WasteType;
+    type?: string;
     remaining?: number;
   };
 
@@ -59,9 +64,6 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
     return base as WasteType;
   };
 
-  const isWasteType = (value?: string): value is WasteType =>
-    Boolean(value && WASTE_OPTIONS.some(option => option.id === value));
-
   const parseDeclaredContainers = (declaredContainers?: unknown): DeclaredContainer[] => {
     let containers: unknown = declaredContainers;
     if (typeof containers === 'string') {
@@ -77,32 +79,43 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
         name: String(item?.name || '').trim(),
         count: Number(item?.count ?? 0) || 0,
         frequency: item?.frequency ? String(item.frequency) : undefined,
-        type: isWasteType(item?.type) ? item.type : undefined,
+        type:
+          typeof item?.type === 'string' && item.type.trim()
+            ? item.type.trim()
+            : undefined,
       }))
       .filter(item => item.name);
   };
 
-  const buildCompanyWaste = (declaredContainers?: unknown): WasteType[] => {
+  const buildCompanyWaste = (declaredContainers?: unknown): string[] => {
     const containers = parseDeclaredContainers(declaredContainers);
     if (!containers.length) return [];
-    const types = new Set<WasteType>();
+    const types = new Set<string>();
     containers.forEach((item: any) => {
       if (!item?.name) return;
-      const mapped = item?.type ? (item.type as WasteType) : mapDeclaredContainerToType(String(item.name));
+      const mapped = item?.type
+        ? item.type
+        : mapDeclaredContainerToType(String(item.name));
       if (mapped) types.add(mapped);
     });
     return Array.from(types);
   };
 
-  const buildWasteList = (address: any, storedWaste: any) => {
+  const buildWasteList = (
+    defMap: Map<string, { name: string; icon: string }>,
+    address: any,
+    storedWaste: any
+  ) => {
     const isCompany = Boolean(address?.notes?.includes('Typ: Firma') || address?.notes?.includes('Właściciel:'));
     if (isCompany) {
       const declared = buildCompanyWaste(address?.declaredContainers);
       if (declared.length > 0) {
-        return buildWasteCategories(declared);
+        return buildWasteCategoriesFromMap(declared, defMap);
       }
     }
-    return Array.isArray(storedWaste) ? storedWaste : buildWasteCategories(address?.wasteTypes as any);
+    return Array.isArray(storedWaste)
+      ? storedWaste
+      : buildWasteCategoriesFromMap((address?.wasteTypes || []) as string[], defMap);
   };
 
   const extractOwnerFromNotes = (notes?: string | null) => {
@@ -118,8 +131,12 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
     return now;
   })();
 
-  const resetWasteList = (address: any, storedWaste: any) => {
-    const baseWaste = buildWasteList(address, storedWaste);
+  const resetWasteList = (
+    defMap: Map<string, { name: string; icon: string }>,
+    address: any,
+    storedWaste: any
+  ) => {
+    const baseWaste = buildWasteList(defMap, address, storedWaste);
     if (!Array.isArray(baseWaste)) return [];
     return baseWaste.map((item: any) => ({ ...item, count: 0 }));
   };
@@ -137,14 +154,14 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
     declaredContainers: DeclaredContainer[],
     collectedByType: Map<string, number>
   ): DeclaredContainerWithRemaining[] => {
-    const declaredByType = new Map<WasteType, number>();
+    const declaredByType = new Map<string, number>();
     declaredContainers.forEach(item => {
       const mapped = item.type ?? mapDeclaredContainerToType(item.name);
       if (!mapped) return;
       declaredByType.set(mapped, (declaredByType.get(mapped) || 0) + (item.count || 0));
     });
 
-    const remainingByType = new Map<WasteType, number>();
+    const remainingByType = new Map<string, number>();
     declaredByType.forEach((declared, type) => {
       const collected = collectedByType.get(type) || 0;
       remainingByType.set(type, Math.max(0, declared - collected));
@@ -202,10 +219,11 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
       return route;
     }
 
+    const defMap = await getWasteDefinitionMap(prisma);
     const resetWasteByAddress = new Map(
       route.routeAddresses.map((item: any) => [
         item.id,
-        resetWasteList(item.address, item.waste),
+        resetWasteList(defMap, item.address, item.waste),
       ])
     );
 
@@ -273,6 +291,7 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
       route.routeAddresses.map(item => item.address.id)
     );
     const collectedByAddress = await aggregateCollectedByAddress(allAddressIds);
+    const defMap = await getWasteDefinitionMap(prisma);
 
     return normalizedRoutes.map((route: RouteWithAddresses) => ({
       id: route.id,
@@ -306,7 +325,7 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
         if (isSummary) return base;
         return {
           ...base,
-          waste: buildWasteList(item.address, item.waste),
+          waste: buildWasteList(defMap, item.address, item.waste),
           issueReason: item.issueReason || undefined,
           issueFlags: (item.issueFlags as string[]) || [],
           issueNote: item.issueNote || undefined,
@@ -359,6 +378,7 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
     route = await resetRouteIfNeeded(route as RouteWithAddresses);
     const addressIds = route.routeAddresses.map(item => item.address.id);
     const collectedByAddress = await aggregateCollectedByAddress(addressIds);
+    const defMapRoute = await getWasteDefinitionMap(prisma);
 
     return {
       id: route.id,
@@ -392,7 +412,7 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
         if (isSummary) return base;
         return {
           ...base,
-          waste: buildWasteList(item.address, item.waste),
+          waste: buildWasteList(defMapRoute, item.address, item.waste),
           issueReason: item.issueReason || undefined,
           issueFlags: (item.issueFlags as string[]) || [],
           issueNote: item.issueNote || undefined,
@@ -445,6 +465,7 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
       );
     }
 
+    const defMapAddr = await getWasteDefinitionMap(prisma);
     return {
       id: routeAddress.address.id,
       street: routeAddress.address.street,
@@ -452,7 +473,7 @@ export const registerDriverRoutes = (app: FastifyInstance) => {
       city: routeAddress.address.city,
       isCollected: routeAddress.isCollected,
       status: routeAddress.status,
-      waste: buildWasteList(routeAddress.address, routeAddress.waste),
+      waste: buildWasteList(defMapAddr, routeAddress.address, routeAddress.waste),
       collectedWasteTypes: Array.isArray(routeAddress.collectedWasteTypes)
         ? (routeAddress.collectedWasteTypes as string[])
         : [],

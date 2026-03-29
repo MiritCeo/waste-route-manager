@@ -1,3 +1,5 @@
+import type { PrismaClient } from '@prisma/client';
+
 export type WasteType =
   | 'bio-green'
   | 'bio-green-240'
@@ -39,14 +41,74 @@ export const WASTE_OPTIONS: Array<{ id: WasteType; name: string; icon: string }>
   { id: 'mixed-1100', name: 'Zmieszane 1100L', icon: '🗑️' },
 ];
 
-export const buildWasteCategories = (types: WasteType[]) => {
-  return types.map(type => {
-    const option = WASTE_OPTIONS.find(item => item.id === type);
+export type WasteCategoryRow = {
+  id: string;
+  name: string;
+  icon: string;
+  count: number;
+};
+
+let definitionMapCache: Map<string, { name: string; icon: string }> | null = null;
+let definitionMapCacheAt = 0;
+const DEFINITION_CACHE_MS = 60_000;
+
+export const invalidateWasteDefinitionCache = () => {
+  definitionMapCache = null;
+  definitionMapCacheAt = 0;
+};
+
+export async function getWasteDefinitionMap(
+  prisma: PrismaClient
+): Promise<Map<string, { name: string; icon: string }>> {
+  const now = Date.now();
+  if (definitionMapCache && now - definitionMapCacheAt < DEFINITION_CACHE_MS) {
+    return definitionMapCache;
+  }
+  const rows = await prisma.wasteContainerDefinition.findMany();
+  const map = new Map<string, { name: string; icon: string }>();
+  rows.forEach(row => {
+    map.set(row.id, { name: row.name, icon: row.icon });
+  });
+  for (const opt of WASTE_OPTIONS) {
+    if (!map.has(opt.id)) {
+      map.set(opt.id, { name: opt.name, icon: opt.icon });
+    }
+  }
+  definitionMapCache = map;
+  definitionMapCacheAt = now;
+  return map;
+}
+
+export const buildWasteCategoriesFromMap = (
+  types: string[],
+  map: Map<string, { name: string; icon: string }>
+): WasteCategoryRow[] =>
+  types.map(type => {
+    const def = map.get(type);
+    const legacy = WASTE_OPTIONS.find(o => o.id === type);
     return {
       id: type,
-      name: option?.name || type,
-      icon: option?.icon || '🗑️',
+      name: def?.name ?? legacy?.name ?? type,
+      icon: def?.icon ?? legacy?.icon ?? '🗑️',
       count: 0,
     };
   });
-};
+
+export async function buildWasteCategories(
+  prisma: PrismaClient,
+  types: string[]
+): Promise<WasteCategoryRow[]> {
+  const map = await getWasteDefinitionMap(prisma);
+  return buildWasteCategoriesFromMap(types, map);
+}
+
+export const isLegacyWasteType = (value?: string): value is WasteType =>
+  Boolean(value && WASTE_OPTIONS.some(option => option.id === value));
+
+export async function isKnownWasteContainerId(prisma: PrismaClient, id: string): Promise<boolean> {
+  if (isLegacyWasteType(id)) return true;
+  const row = await prisma.wasteContainerDefinition.findFirst({
+    where: { id, active: true },
+  });
+  return Boolean(row);
+}

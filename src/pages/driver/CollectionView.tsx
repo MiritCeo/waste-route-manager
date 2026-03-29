@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Address, WasteCategory, AddressStatus, AddressIssueReason, AddressIssueFlag, WasteType } from '@/types/waste';
+import { Address, WasteCategory, AddressStatus, AddressIssueReason, AddressIssueFlag } from '@/types/waste';
 import { WasteCounter } from '@/components/WasteCounter';
 import { Header } from '@/components/Header';
 import { Check, MapPin, AlertTriangle, PauseCircle, Camera } from 'lucide-react';
@@ -8,8 +8,8 @@ import { cn } from '@/lib/utils';
 import { useRoutes } from '@/contexts/RouteContext';
 import { routesService } from '@/api/services/routes.service';
 import { ROUTES } from '@/constants/routes';
-import { WASTE_OPTIONS } from '@/constants/waste';
 import { toast } from 'sonner';
+import { useWasteOptions } from '@/hooks/useWasteOptions';
 import { issueConfigService } from '@/api/services/issue-config.service';
 import { DEFAULT_ISSUE_CONFIG } from '@/constants/issueConfig';
 
@@ -23,7 +23,8 @@ export const CollectionView = () => {
     getCollectionDraft,
     saveCollectionDraft,
   } = useRoutes();
-  
+  const { options: wasteOptionList } = useWasteOptions();
+
   const [address, setAddress] = useState<Address | null>(null);
   const [waste, setWaste] = useState<WasteCategory[]>([]);
   const [status, setStatus] = useState<AddressStatus>('COLLECTED');
@@ -48,7 +49,7 @@ export const CollectionView = () => {
   const declaredContainers = useMemo(() => {
     if (!address?.declaredContainers?.length) return [];
     return address.declaredContainers.map((item, index) => {
-      const option = item.type ? WASTE_OPTIONS.find(entry => entry.id === item.type) : undefined;
+      const option = item.type ? wasteOptionList.find(entry => entry.id === item.type) : undefined;
       return {
         key: `${item.type || item.name}-${index}`,
         label: option?.name || item.name,
@@ -58,26 +59,26 @@ export const CollectionView = () => {
         frequency: item.frequency,
       };
     });
-  }, [address]);
+  }, [address, wasteOptionList]);
 
-  const expandWasteSelection = (types: WasteType[]) => {
-    const expanded = new Set<WasteType>();
+  const expandWasteSelection = (types: string[]) => {
+    const expanded = new Set<string>();
     types.forEach(type => {
       expanded.add(type);
       if (type === 'bio-green' || type === 'bio-kitchen' || type === 'mixed') {
-        expanded.add(`${type}-240` as WasteType);
+        expanded.add(`${type}-240`);
       }
     });
     return Array.from(expanded);
   };
 
-  const mergeWasteForSelection = (items: WasteCategory[], types: WasteType[]) => {
+  const mergeWasteForSelection = (items: WasteCategory[], types: string[]) => {
     if (types.length === 0) return items;
     const map = new Map(items.map(item => [item.id, item]));
     const expandedTypes = expandWasteSelection(types);
     expandedTypes.forEach(type => {
       if (map.has(type)) return;
-      const option = WASTE_OPTIONS.find(entry => entry.id === type);
+      const option = wasteOptionList.find(entry => entry.id === type);
       map.set(type, {
         id: type,
         name: option?.name || type,

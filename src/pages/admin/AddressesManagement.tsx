@@ -35,8 +35,7 @@ import {
 import { Plus, Search, MapPin, Edit, Trash2, Filter, ArrowUpDown, Upload, Download, BarChart3, Building2, Leaf, Link2, Tag, Recycle, GlassWater, Flame, Newspaper, Package } from 'lucide-react';
 import { adminService } from '@/api/services/admin.service';
 import { AdminAddress } from '@/types/admin';
-import { WASTE_OPTIONS } from '@/constants/waste';
-import { WasteType } from '@/types/waste';
+import { useWasteOptions } from '@/hooks/useWasteOptions';
 import { APP_CONFIG } from '@/constants/config';
 import { toast } from 'sonner';
 import { applyApiFieldErrors } from '@/utils/formErrors';
@@ -44,7 +43,6 @@ import { normalizeCityName } from '@/utils/addressKeys';
 import { ROUTES, getAdminAddressStatsPath } from '@/constants/routes';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
-const wasteEnum = z.enum(WASTE_OPTIONS.map(option => option.id) as [WasteType, ...WasteType[]]);
 const addressSchema = z.object({
   street: z.string().min(2, 'Podaj ulicę'),
   number: z.string().min(1, 'Podaj numer'),
@@ -52,7 +50,7 @@ const addressSchema = z.object({
   postalCode: z.string().optional().or(z.literal('')),
   notes: z.string().optional().or(z.literal('')),
   composting: z.string().optional().or(z.literal('')),
-  wasteTypes: z.array(wasteEnum).min(1, 'Wybierz przynajmniej jeden typ odpadu'),
+  wasteTypes: z.array(z.string()).min(1, 'Wybierz przynajmniej jeden typ odpadu'),
   declaredContainers: z
     .array(
       z.object({
@@ -69,11 +67,12 @@ const addressSchema = z.object({
 type AddressFormValues = z.infer<typeof addressSchema>;
 
 export const AddressesManagement = () => {
+  const { options: visibleWasteOptions } = useWasteOptions();
   const navigate = useNavigate();
   const [searchQuery, setSearchQuery] = useState('');
   const [searchDraft, setSearchDraft] = useState('');
   const [cityFilter, setCityFilter] = useState('ALL');
-  const [wasteFilter, setWasteFilter] = useState<WasteType[]>([]);
+  const [wasteFilter, setWasteFilter] = useState<string[]>([]);
   const [wasteGroupFilter, setWasteGroupFilter] = useState<
     Array<'bio' | 'glass' | 'ash' | 'mixed' | 'paper' | 'plastic'>
   >([]);
@@ -324,16 +323,15 @@ export const AddressesManagement = () => {
     setPage(1);
   };
 
-  const visibleWasteOptions = useMemo(() => WASTE_OPTIONS, []);
 
   const wasteFilterLabel = useMemo(() => {
     if (wasteFilter.length === 0) return 'Wszystkie typy';
     const names = wasteFilter
-      .map(id => WASTE_OPTIONS.find(option => option.id === id)?.name || id)
+      .map(id => visibleWasteOptions.find(option => option.id === id)?.name || id)
       .filter(Boolean);
     if (names.length <= 2) return names.join(', ');
     return `${names.slice(0, 2).join(', ')} +${names.length - 2}`;
-  }, [wasteFilter]);
+  }, [wasteFilter, visibleWasteOptions]);
 
   const dataStatusLabel = useMemo(() => {
     if (dataStatusFilter.length === 0) return 'Wszystkie';
@@ -423,7 +421,7 @@ export const AddressesManagement = () => {
   const isCompanyAddress = (address: AdminAddress) =>
     Boolean(address.notes?.includes('Typ: Firma') || address.notes?.includes('Właściciel:'));
 
-  const mapDeclaredNameToType = (name?: string): WasteType | null => {
+  const mapDeclaredNameToType = (name?: string): string | null => {
     if (!name) return null;
     const normalized = name.toLowerCase();
     let base:
@@ -452,9 +450,9 @@ export const AddressesManagement = () => {
     const sizeMatch = normalized.match(/\b(\d{2,4})\s*l\b|\b(\d{2,4})l\b/);
     const sizeValue = sizeMatch?.[1] || sizeMatch?.[2];
     const size = sizeValue ? Number(sizeValue) : undefined;
-    if (size === 1100) return `${base}-1100` as WasteType;
-    if (size === 240) return `${base}-240` as WasteType;
-    return base as WasteType;
+    if (size === 1100) return `${base}-1100`;
+    if (size === 240) return `${base}-240`;
+    return base;
   };
 
   const notesValue = form.watch('notes');
@@ -464,8 +462,8 @@ export const AddressesManagement = () => {
     Boolean(notesValue?.includes('Typ: Firma') || notesValue?.includes('Właściciel:')) ||
     Boolean(editingAddress && isCompanyAddress(editingAddress));
 
-  const getDeclaredCountForType = (typeId: WasteType) => {
-    const option = WASTE_OPTIONS.find(item => item.id === typeId);
+  const getDeclaredCountForType = (typeId: string) => {
+    const option = visibleWasteOptions.find(item => item.id === typeId);
     if (!option) return 0;
     const entry = declaredContainersValue?.find(
       item =>
@@ -476,8 +474,8 @@ export const AddressesManagement = () => {
     return entry?.count ?? 0;
   };
 
-  const updateDeclaredCountForType = (typeId: WasteType, nextValue: number) => {
-    const option = WASTE_OPTIONS.find(item => item.id === typeId);
+  const updateDeclaredCountForType = (typeId: string, nextValue: number) => {
+    const option = visibleWasteOptions.find(item => item.id === typeId);
     if (!option) return;
     const current = declaredContainersValue ? [...declaredContainersValue] : [];
     const index = current.findIndex(item => item.type === typeId || item.name === option.name);
@@ -698,7 +696,7 @@ export const AddressesManagement = () => {
       address.declaredContainers?.map(item => {
         const mappedType = item.type ?? mapDeclaredNameToType(item.name);
         if (!mappedType) return item;
-        const option = WASTE_OPTIONS.find(optionItem => optionItem.id === mappedType);
+        const option = visibleWasteOptions.find(optionItem => optionItem.id === mappedType);
         return {
           ...item,
           type: mappedType,
@@ -723,7 +721,7 @@ export const AddressesManagement = () => {
     try {
       const declaredContainers = values.wasteTypes
         .map(typeId => {
-          const option = WASTE_OPTIONS.find(item => item.id === typeId);
+          const option = visibleWasteOptions.find(item => item.id === typeId);
           const entry = values.declaredContainers?.find(
             item => item.type === typeId || item.name === option?.name
           );
@@ -951,7 +949,7 @@ export const AddressesManagement = () => {
                     </Button>
                   </div>
                   <div className="mt-2 space-y-2">
-                    {WASTE_OPTIONS.map(option => {
+                    {visibleWasteOptions.map(option => {
                       const isChecked = wasteFilter.includes(option.id);
                       return (
                         <label key={option.id} className="flex items-center gap-2 text-sm cursor-pointer">
@@ -1355,7 +1353,7 @@ export const AddressesManagement = () => {
                     )}
                     <div className="flex flex-wrap gap-2">
                       {address.wasteTypes.map(type => {
-                        const option = WASTE_OPTIONS.find(item => item.id === type);
+                        const option = visibleWasteOptions.find(item => item.id === type);
                         return (
                           <span
                             key={type}
@@ -1594,7 +1592,7 @@ export const AddressesManagement = () => {
                     ) : (
                       <div className="grid gap-2 md:grid-cols-2">
                         {selectedWasteTypes.map(typeId => {
-                          const option = WASTE_OPTIONS.find(item => item.id === typeId);
+                          const option = visibleWasteOptions.find(item => item.id === typeId);
                           if (!option) return null;
                           return (
                             <label

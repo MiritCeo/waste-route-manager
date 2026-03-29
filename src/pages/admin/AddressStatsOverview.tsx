@@ -13,7 +13,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { adminService } from '@/api/services/admin.service';
 import { AddressStatsSummaryRow } from '@/types/admin';
-import { WASTE_OPTIONS } from '@/constants/waste';
+import { useWasteOptions } from '@/hooks/useWasteOptions';
 import { ROUTES, getAdminAddressStatsPath } from '@/constants/routes';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { MapPin, Search } from 'lucide-react';
@@ -21,6 +21,7 @@ import { toast } from 'sonner';
 
 export const AddressStatsOverview = () => {
   const navigate = useNavigate();
+  const { options: wasteOptionsFromApi } = useWasteOptions();
   const [rows, setRows] = useState<AddressStatsSummaryRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -44,7 +45,7 @@ export const AddressStatsOverview = () => {
     loadSummary();
   }, []);
 
-  const wasteColumns = useMemo(() => WASTE_OPTIONS, []);
+  const wasteColumns = useMemo(() => wasteOptionsFromApi, [wasteOptionsFromApi]);
   const cityOptions = useMemo(() => {
     const unique = new Set(rows.map(row => row.city));
     return Array.from(unique.values()).sort((a, b) => a.localeCompare(b));
@@ -69,7 +70,7 @@ export const AddressStatsOverview = () => {
   }, [searchQuery, cityFilter]);
 
   const summaryTotals = useMemo(() => {
-    const totalsByType = Object.fromEntries(WASTE_OPTIONS.map(option => [option.id, 0]));
+    const totalsByType = Object.fromEntries(wasteColumns.map(option => [option.id, 0]));
     let totalWaste = 0;
     rows.forEach(row => {
       totalWaste += row.totalWaste || 0;
@@ -78,7 +79,7 @@ export const AddressStatsOverview = () => {
       });
     });
     return { totalWaste, totalsByType };
-  }, [rows]);
+  }, [rows, wasteColumns]);
 
   const getSizeLabel = (id: string) => {
     const match = id.match(/-(\d+)$/);
@@ -108,7 +109,7 @@ export const AddressStatsOverview = () => {
                 <p className="text-xs text-muted-foreground">Łącznie odebranych</p>
                 <p className="text-2xl font-bold text-foreground">{summaryTotals.totalWaste}</p>
               </div>
-              {WASTE_OPTIONS.map(option => (
+              {wasteColumns.map(option => (
                 <div key={option.id} className="bg-card rounded-2xl p-4 border border-border">
                   <div className="flex items-center gap-2">
                     <span className="text-lg">{option.icon}</span>

@@ -37,8 +37,7 @@ import {
 } from '@/components/ui/form';
 import { adminService } from '@/api/services/admin.service';
 import { buildAddressKey, formatAddressLabel, normalizeCityName } from '@/utils/addressKeys';
-import { WASTE_OPTIONS } from '@/constants/waste';
-import { WasteType } from '@/types/waste';
+import { useWasteOptions } from '@/hooks/useWasteOptions';
 import { ROUTES } from '@/constants/routes';
 import { toast } from 'sonner';
 import { DeclaredContainer } from '@/types/admin';
@@ -49,7 +48,7 @@ type ParsedAddress = {
   city: string;
   postalCode?: string;
   notes: string;
-  wasteTypes: WasteType[];
+  wasteTypes: string[];
   declaredContainers: DeclaredContainer[];
   source: 'company' | 'residential';
   occurrences: number;
@@ -84,7 +83,7 @@ type InvalidAddressRow = {
   postalCode?: string;
   notes: string;
   composting?: string;
-  wasteTypes: WasteType[];
+  wasteTypes: string[];
   declaredContainers: DeclaredContainer[];
 };
 
@@ -186,9 +185,9 @@ const parseAddressValue = (value: string) => {
   return { street, number, city, postalCode };
 };
 
-const mapWasteTypes = (container: string): WasteType[] => {
+const mapWasteTypes = (container: string): string[] => {
   const normalized = container.toLowerCase();
-  const types = new Set<WasteType>();
+  const types = new Set<string>();
   const sizeMatch = normalized.match(/\b(\d{2,4})\s*l\b|\b(\d{2,4})l\b/);
   const sizeValue = sizeMatch?.[1] || sizeMatch?.[2];
   const size = sizeValue ? Number(sizeValue) : undefined;
@@ -209,9 +208,9 @@ const mapWasteTypes = (container: string): WasteType[] => {
 
   if (normalized.includes('bio')) {
     const base = normalized.includes('kuchen') ? 'bio-kitchen' : 'bio-green';
-    if (size === 1100) types.add(`${base}-1100` as WasteType);
-    else if (size === 240) types.add(`${base}-240` as WasteType);
-    else types.add(base as WasteType);
+    if (size === 1100) types.add(`${base}-1100`);
+    else if (size === 240) types.add(`${base}-240`);
+    else types.add(base);
   }
 
   if (normalized.includes('papier')) {
@@ -305,7 +304,6 @@ const parseDateValue = (value?: string): number => {
   return Number.isNaN(timestamp) ? 0 : timestamp;
 };
 
-const wasteEnum = z.enum(WASTE_OPTIONS.map(option => option.id) as [WasteType, ...WasteType[]]);
 const addressSchema = z.object({
   street: z.string().min(2, 'Podaj ulicę'),
   number: z.string().min(1, 'Podaj numer'),
@@ -313,13 +311,14 @@ const addressSchema = z.object({
   postalCode: z.string().optional().or(z.literal('')),
   notes: z.string().optional().or(z.literal('')),
   composting: z.string().optional().or(z.literal('')),
-  wasteTypes: z.array(wasteEnum).min(1, 'Wybierz przynajmniej jeden typ odpadu'),
+  wasteTypes: z.array(z.string()).min(1, 'Wybierz przynajmniej jeden typ odpadu'),
   active: z.boolean(),
 });
 
 type AddressFormValues = z.infer<typeof addressSchema>;
 
 export const AddressesImport = () => {
+  const { options: visibleWasteOptions } = useWasteOptions();
   const navigate = useNavigate();
   const [companyFile, setCompanyFile] = useState<File | null>(null);
   const [residentialFile, setResidentialFile] = useState<File | null>(null);
@@ -926,7 +925,10 @@ export const AddressesImport = () => {
     }
   };
 
-  const wasteLegend = useMemo(() => WASTE_OPTIONS.map(option => option.name).join(', '), []);
+  const wasteLegend = useMemo(
+    () => visibleWasteOptions.map(option => option.name).join(', '),
+    [visibleWasteOptions]
+  );
 
   return (
     <div className="min-h-screen bg-background">
@@ -1329,7 +1331,7 @@ export const AddressesImport = () => {
                   <FormItem>
                     <FormLabel>Typy odpadów</FormLabel>
                     <div className="grid gap-2 md:grid-cols-2">
-                      {WASTE_OPTIONS.map(option => {
+                      {visibleWasteOptions.map(option => {
                         const isChecked = field.value.includes(option.id);
                         return (
                           <label key={option.id} className="flex items-center gap-2 text-sm">

@@ -2,7 +2,11 @@ import { FastifyInstance } from 'fastify';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../db.js';
 import { Prisma } from '@prisma/client';
-import { buildWasteCategories, WASTE_OPTIONS } from '../utils/waste.js';
+import {
+  buildWasteCategoriesFromMap,
+  getWasteDefinitionMap,
+  WASTE_OPTIONS,
+} from '../utils/waste.js';
 import { DEFAULT_ISSUE_CONFIG } from '../utils/issueConfig.js';
 
 const normalizeText = (value?: string) =>
@@ -736,6 +740,7 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
     const addresses = await prisma.address.findMany({
       where: { id: { in: body.addressIds } },
     });
+    const defMap = await getWasteDefinitionMap(prisma);
 
     const route = await prisma.route.create({
       data: {
@@ -752,7 +757,7 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
             return {
               addressId,
               position: index,
-              waste: buildWasteCategories(wasteTypes as any),
+              waste: buildWasteCategoriesFromMap(wasteTypes, defMap),
             };
           }),
         },
@@ -792,6 +797,7 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
       const addresses = await prisma.address.findMany({
         where: { id: { in: body.addressIds } },
       });
+      const defMap = await getWasteDefinitionMap(prisma);
       await prisma.routeAddress.createMany({
         data: body.addressIds.map((addressId: string, index: number) => {
           const address = addresses.find(item => item.id === addressId);
@@ -800,7 +806,7 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
             routeId: id,
             addressId,
             position: index,
-            waste: buildWasteCategories(wasteTypes as any),
+            waste: buildWasteCategoriesFromMap(wasteTypes, defMap),
           };
         }),
       });
@@ -888,8 +894,10 @@ export const registerAdminRoutes = (app: FastifyInstance) => {
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
 
+    const defMap = await getWasteDefinitionMap(prisma);
     const resetWaste = (address: any, storedWaste: any) => {
-      const baseWaste = buildWasteCategories(address?.wasteTypes as any);
+      const wasteTypes = (address?.wasteTypes || []) as string[];
+      const baseWaste = buildWasteCategoriesFromMap(wasteTypes, defMap);
       const source = Array.isArray(storedWaste) && storedWaste.length > 0 ? storedWaste : baseWaste;
       return source.map((item: any) => ({ ...item, count: 0 }));
     };

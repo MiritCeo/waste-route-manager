@@ -33,6 +33,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { applyApiFieldErrors } from '@/utils/formErrors';
 import { buildAddressKey } from '@/utils/addressKeys';
+import { extractOwnerFromNotes } from '@/utils/addressNotes';
 
 const routeSchema = z.object({
   name: z.string().min(2, 'Podaj nazwę trasy'),
@@ -939,10 +940,18 @@ export const RouteEditor = () => {
                                 field.onChange([...field.value, address.id]);
                               }}
                             >
-                              <span className="flex items-center gap-2">
-                                <span>{address.street} {address.number}, {address.city}</span>
+                              <span className="flex items-center gap-2 min-w-0 text-left">
+                                <span className="truncate">
+                                  {address.street} {address.number}, {address.city}
+                                  {isCompanyAddress(address) && extractOwnerFromNotes(address.notes) && (
+                                    <span className="text-muted-foreground font-normal">
+                                      {' — '}
+                                      {extractOwnerFromNotes(address.notes)}
+                                    </span>
+                                  )}
+                                </span>
                                 {isCompanyAddress(address) && (
-                                  <span className="px-2 py-0.5 rounded-full text-xs font-medium border bg-primary/10 text-primary border-primary/20">
+                                  <span className="px-2 py-0.5 rounded-full text-xs font-medium border bg-primary/10 text-primary border-primary/20 shrink-0">
                                     Firma
                                   </span>
                                 )}
@@ -977,10 +986,18 @@ export const RouteEditor = () => {
                                       if (isAdded) return;
                                     }}
                                   >
-                                    <span className="flex items-center gap-2">
-                                      <span>{address.street} {address.number}, {address.city}</span>
+                                    <span className="flex items-center gap-2 min-w-0 text-left">
+                                      <span className="truncate">
+                                        {address.street} {address.number}, {address.city}
+                                        {isCompanyAddress(address) && extractOwnerFromNotes(address.notes) && (
+                                          <span className="text-muted-foreground font-normal">
+                                            {' — '}
+                                            {extractOwnerFromNotes(address.notes)}
+                                          </span>
+                                        )}
+                                      </span>
                                       {isCompanyAddress(address) && (
-                                        <span className="px-2 py-0.5 rounded-full text-xs font-medium border bg-primary/10 text-primary border-primary/20">
+                                        <span className="px-2 py-0.5 rounded-full text-xs font-medium border bg-primary/10 text-primary border-primary/20 shrink-0">
                                           Firma
                                         </span>
                                       )}
@@ -1025,7 +1042,11 @@ export const RouteEditor = () => {
                             .map(([id, move]) => {
                               const address = addresses.find(item => item.id === id);
                               const label = address
-                                ? `${address.street} ${address.number}`
+                                ? `${address.street} ${address.number}${
+                                    extractOwnerFromNotes(address.notes)
+                                      ? ` (${extractOwnerFromNotes(address.notes)})`
+                                      : ''
+                                  }`
                                 : `ID ${id}`;
                               return `${label} (${move.from + 1} → ${move.to + 1})`;
                             })
@@ -1050,11 +1071,19 @@ export const RouteEditor = () => {
                               <span className={cn('w-6 text-xs', isMoved ? 'text-primary' : 'text-muted-foreground')}>
                                 {index + 1}.
                               </span>
-                              <span className="flex-1">
-                                {address.street} {address.number}, {address.city}
+                              <span className="flex-1 min-w-0">
+                                <span className="block truncate">
+                                  {address.street} {address.number}, {address.city}
+                                  {isCompanyAddress(address) && extractOwnerFromNotes(address.notes) && (
+                                    <span className="text-muted-foreground font-normal">
+                                      {' — '}
+                                      {extractOwnerFromNotes(address.notes)}
+                                    </span>
+                                  )}
+                                </span>
                               </span>
                               {isCompanyAddress(address) && (
-                                <span className="px-2 py-0.5 rounded-full text-xs font-medium border bg-primary/10 text-primary border-primary/20">
+                                <span className="px-2 py-0.5 rounded-full text-xs font-medium border bg-primary/10 text-primary border-primary/20 shrink-0">
                                   Firma
                                 </span>
                               )}

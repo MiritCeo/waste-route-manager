@@ -5,6 +5,7 @@ import multipart from '@fastify/multipart';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerAdminRoutes } from './routes/admin.js';
 import { registerDriverRoutes } from './routes/routes.js';
+import { registerWasteContainerRoutes, seedWasteContainerDefinitionsIfEmpty } from './routes/wasteContainers.js';
 
 const app = Fastify({ logger: true, bodyLimit: 50 * 1024 * 1024 });
 
@@ -38,6 +39,7 @@ app.register(async (instance) => {
 app.register(async (instance) => {
   instance.addHook('preHandler', instance.authenticate);
   registerAdminRoutes(instance);
+  registerWasteContainerRoutes(instance);
 }, { prefix: '/api' });
 
 app.register(async (instance) => {
@@ -48,8 +50,13 @@ app.register(async (instance) => {
 const port = Number(process.env.PORT || 3000);
 
 app.listen({ port, host: '0.0.0.0' })
-  .then(() => {
+  .then(async () => {
     app.log.info(`API listening on ${port}`);
+    try {
+      await seedWasteContainerDefinitionsIfEmpty();
+    } catch (error) {
+      app.log.warn({ error }, 'Waste container seed skipped');
+    }
   })
   .catch((error) => {
     app.log.error(error);

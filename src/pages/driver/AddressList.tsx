@@ -8,7 +8,7 @@ import { Header } from '@/components/Header';
 import { useRoutes } from '@/contexts/RouteContext';
 import { AddressStatus } from '@/types/waste';
 import { ROUTES } from '@/constants/routes';
-import { WASTE_OPTIONS } from '@/constants/waste';
+import { useWasteOptions } from '@/hooks/useWasteOptions';
 import { toast } from 'sonner';
 import { CloudOff } from 'lucide-react';
 
@@ -25,6 +25,7 @@ export const AddressList = () => {
     hasCollectionDraft,
     syncQueueCount,
   } = useRoutes();
+  const { options: wasteLabelOptions } = useWasteOptions();
   const [filter, setFilter] = useState<FilterType>('all');
   const [isLoading, setIsLoading] = useState(true);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -426,7 +427,7 @@ export const AddressList = () => {
         {selectedWasteTypes.length > 0 && (
           <div className="flex flex-wrap gap-2">
             {selectedWasteTypes.map(type => {
-              const option = WASTE_OPTIONS.find(item => item.id === type);
+              const option = wasteLabelOptions.find(item => item.id === type);
               return (
                 <span
                   key={type}

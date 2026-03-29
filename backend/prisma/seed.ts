@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { seedWasteContainerDefinitionsIfEmpty } from '../src/routes/wasteContainers.js';
 
 const prisma = new PrismaClient();
 
@@ -46,6 +47,8 @@ async function main() {
       active: true,
     },
   });
+
+  await seedWasteContainerDefinitionsIfEmpty();
 }
 
 main()

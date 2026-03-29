@@ -1,9 +1,8 @@
 import { Minus, Plus } from 'lucide-react';
-import { WasteType } from '@/types/waste';
 import { cn } from '@/lib/utils';
 
 interface WasteCounterProps {
-  type: WasteType;
+  type: string;
   name: string;
   icon: string;
   count: number;
@@ -57,8 +56,11 @@ const wasteStyles: Record<
   },
 };
 
-const resolveBaseType = (type: WasteType) =>
-  type.replace(/-(240|1100)$/, '') as keyof typeof wasteStyles;
+const resolveBaseType = (type: string): keyof typeof wasteStyles => {
+  const stripped = type.replace(/-(240|1100)$/, '');
+  if (stripped in wasteStyles) return stripped as keyof typeof wasteStyles;
+  return 'mixed';
+};
 
 export const WasteCounter = ({
   type,

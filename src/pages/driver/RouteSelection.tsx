@@ -7,8 +7,7 @@ import logo from '@/assets/kompaktowy-pleszew-logo.png';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRoutes } from '@/contexts/RouteContext';
 import { ROUTES } from '@/constants/routes';
-import { BASE_WASTE_OPTIONS } from '@/constants/waste';
-import { WasteType } from '@/types/waste';
+import { useWasteOptions } from '@/hooks/useWasteOptions';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 
@@ -16,7 +15,8 @@ export const RouteSelection = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
   const { routes, isLoading, setSelectedRoute, selectedWasteTypes, setSelectedWasteTypes, syncQueueCount } = useRoutes();
-  const [selectionDraft, setSelectionDraft] = useState<WasteType[]>([]);
+  const { baseOptions } = useWasteOptions();
+  const [selectionDraft, setSelectionDraft] = useState<string[]>([]);
   const [showSelection, setShowSelection] = useState(false);
 
   useEffect(() => {
@@ -27,9 +27,9 @@ export const RouteSelection = () => {
   const selectedWasteLabel = useMemo(() => {
     if (selectedWasteTypes.length === 0) return 'Brak wyboru';
     return selectedWasteTypes
-      .map(type => BASE_WASTE_OPTIONS.find(option => option.id === type)?.name || type)
+      .map(type => baseOptions.find(option => option.id === type)?.name || type)
       .join(', ');
-  }, [selectedWasteTypes]);
+  }, [selectedWasteTypes, baseOptions]);
 
   const handleSelectRoute = (routeId: string) => {
     if (selectedWasteTypes.length === 0) {
@@ -62,14 +62,14 @@ export const RouteSelection = () => {
     setShowSelection(false);
   };
 
-  const handleToggleWaste = (type: WasteType) => {
+  const handleToggleWaste = (type: string) => {
     setSelectionDraft(prev =>
       prev.includes(type) ? prev.filter(item => item !== type) : [...prev, type]
     );
   };
 
   const handleSelectAll = () => {
-    setSelectionDraft(BASE_WASTE_OPTIONS.map(option => option.id));
+    setSelectionDraft(baseOptions.map(option => option.id));
   };
 
   const handleClearAll = () => {
@@ -172,7 +172,7 @@ export const RouteSelection = () => {
               </Button>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              {BASE_WASTE_OPTIONS.map(option => {
+              {baseOptions.map(option => {
                 const isChecked = selectionDraft.includes(option.id);
                 return (
                   <button

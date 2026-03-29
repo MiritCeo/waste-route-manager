@@ -1,4 +1,4 @@
-import { Route, WasteCategory, WasteType, AddressIssueFlag, AddressIssueReason, AddressStatus } from './waste';
+import { Route, WasteCategory, AddressIssueFlag, AddressIssueReason, AddressStatus } from './waste';
 import { User } from './user';
 
 export interface DashboardStats {
@@ -47,7 +47,7 @@ export interface AddressFormData {
   city: string;
   postalCode?: string;
   notes?: string;
-  wasteTypes: WasteType[];
+  wasteTypes: string[];
   active?: boolean;
 }
 
@@ -121,7 +121,7 @@ export interface AdminAddress {
   postalCode?: string;
   notes?: string;
   composting?: string;
-  wasteTypes: WasteType[];
+  wasteTypes: string[];
   declaredContainers?: DeclaredContainer[];
   active: boolean;
   createdAt: string;
@@ -204,7 +204,7 @@ export interface DeclaredContainer {
   name: string;
   count: number;
   frequency?: string;
-  type?: WasteType;
+  type?: string;
 }
 
 export interface ImportAddressesResult {

@@ -1,5 +1,5 @@
 import { apiClient } from '../client';
-import { Route, Address, WasteCategory, AddressStatus, AddressIssueReason, AddressIssueFlag, WasteType } from '@/types/waste';
+import { Route, Address, WasteCategory, AddressStatus, AddressIssueReason, AddressIssueFlag } from '@/types/waste';
 import { QueryParams } from '@/types/api';
 import { RouteFormData } from '@/types/admin';
 
@@ -39,7 +39,7 @@ class RoutesService {
       issueNote?: string;
       issuePhoto?: string;
       issuePhotoFile?: File;
-      selectedWasteTypes?: WasteType[];
+      selectedWasteTypes?: string[];
     }
   ): Promise<Address> {
     const status = details?.status ?? 'COLLECTED';
