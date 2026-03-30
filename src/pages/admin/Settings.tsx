@@ -11,6 +11,8 @@ import { wasteContainersService, WasteContainerDto } from '@/api/services/wasteC
 import { DEFAULT_ISSUE_CONFIG } from '@/constants/issueConfig';
 import { IssueOption } from '@/types/issueConfig';
 import { toast } from 'sonner';
+import { WASTE_CONTAINER_ICON_CHOICES } from '@/constants/waste';
+import { cn } from '@/lib/utils';
 
 export const Settings = () => {
   const navigate = useNavigate();
@@ -109,7 +111,7 @@ export const Settings = () => {
       setSavingWaste(true);
       await wasteContainersService.create({
         name,
-        icon: newWasteIcon.trim() || '🗑️',
+        icon: newWasteIcon,
       });
       toast.success('Dodano rodzaj pojemnika');
       setNewWasteName('');
@@ -428,26 +430,39 @@ export const Settings = () => {
             </div>
           )}
 
-          <div className="rounded-lg border border-dashed border-border p-3 space-y-2">
+          <div className="rounded-lg border border-dashed border-border p-3 space-y-3">
             <p className="text-xs font-medium text-muted-foreground">Dodaj nowy rodzaj</p>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Input
-                placeholder="Nazwa (np. Plastik 500L)"
-                value={newWasteName}
-                onChange={(e) => setNewWasteName(e.target.value)}
-                className="flex-1"
-              />
-              <Input
-                placeholder="Ikona"
-                value={newWasteIcon}
-                onChange={(e) => setNewWasteIcon(e.target.value)}
-                className="w-20"
-                maxLength={8}
-              />
-              <Button type="button" onClick={handleAddWasteContainer} disabled={savingWaste}>
-                {savingWaste ? 'Dodawanie...' : 'Dodaj'}
-              </Button>
+            <Input
+              placeholder="Nazwa (np. Plastik 500L)"
+              value={newWasteName}
+              onChange={(e) => setNewWasteName(e.target.value)}
+              className="max-w-xl"
+            />
+            <div>
+              <p className="text-xs text-muted-foreground mb-2">Ikona</p>
+              <div className="flex flex-wrap gap-2">
+                {WASTE_CONTAINER_ICON_CHOICES.map((icon) => (
+                  <button
+                    key={icon}
+                    type="button"
+                    title={icon}
+                    onClick={() => setNewWasteIcon(icon)}
+                    className={cn(
+                      'h-11 w-11 rounded-lg border text-xl leading-none flex items-center justify-center transition-colors',
+                      'hover:bg-muted/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      newWasteIcon === icon
+                        ? 'border-primary bg-primary/15 ring-2 ring-primary/30'
+                        : 'border-border bg-background'
+                    )}
+                  >
+                    {icon}
+                  </button>
+                ))}
+              </div>
             </div>
+            <Button type="button" onClick={handleAddWasteContainer} disabled={savingWaste}>
+              {savingWaste ? 'Dodawanie...' : 'Dodaj'}
+            </Button>
           </div>
         </div>
       </main>

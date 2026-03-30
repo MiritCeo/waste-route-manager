@@ -25,6 +25,11 @@ export const BASE_WASTE_OPTIONS = WASTE_OPTIONS.filter(
   option => !option.id.endsWith('-240') && !option.id.endsWith('-1100')
 );
 
+/** Unikalne ikony z definicji pojemników — wybór przy dodawaniu w ustawieniach */
+export const WASTE_CONTAINER_ICON_CHOICES: string[] = Array.from(
+  new Set(WASTE_OPTIONS.map(option => option.icon))
+);
+
 export const WASTE_LABELS: Record<WasteType, string> = WASTE_OPTIONS.reduce(
   (acc, option) => {
     acc[option.id] = option.name;
